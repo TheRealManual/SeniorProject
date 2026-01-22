@@ -41,8 +41,10 @@ Backend will run on http://localhost:3001
 ## Environment Variables
 
 Frontend (.env):
-- `VITE_API_URL` - Backend URL (http://localhost:3001 for local, App Runner URL for prod)
+- `VITE_API_URL_DEV` - Backend URL for local development (http://localhost:3001)
+- `VITE_API_URL_PROD` - Backend URL for production (your App Runner URL)
 
 Backend (.env):
 - `PORT` - Server port (3001)
-- `FRONTEND_URL` - Frontend URL for CORS (leave empty for local, add Amplify URL for prod)
+- `NODE_ENV` - Environment mode (development for local, production for App Runner)
+- `FRONTEND_URL_PROD` - Frontend URL for CORS in production (your Amplify URL)
