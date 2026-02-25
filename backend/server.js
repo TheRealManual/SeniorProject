@@ -28,7 +28,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
 
-// A simple health check route
+// A simple health check route to verify backend connectivity from the frontend
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'connected' });
 });

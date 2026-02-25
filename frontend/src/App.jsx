@@ -120,7 +120,7 @@ function App() {
                 </div>
             )}
 
-            {/* Connection Indicator - MUST be inside the return div */}
+            {/* Connection Indicator to see if frontend is connected to backend*/}
             <div className="connection-indicator" title={`Backend: ${backendStatus}`}>
                 <span className={`dot ${backendStatus}`}></span>
                 <span className="status-text">Server</span>
