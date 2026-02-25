@@ -1,0 +1,20 @@
+Completed (Functional)
+C.1 - C.6: Chess Board UI: You have a responsive, full-screen board with correct square coloring and unicode piece rendering.
+
+P.2: Movement Logic: Pieces can be selected and moved to new coordinates.
+
+R.3: Turn Order: The system tracks "White" vs "Black" turns and prevents players from moving out of turn.
+
+C.5: Position Updates: You implemented "Deep Copying" (board.map(r => [...r])), ensuring React correctly detects state changes and rerenders the board.
+
+F.5: Feedback System: You have a working popup system (errorPopup) that gives users real-time feedback on illegal moves.
+
+U.1: Responsive Layout: The CSS uses vmin units, making the board adjust to different screen sizes while staying centered.
+
+In Progrss
+
+R.1: Basic Rule Validation: We have successfully restricted Pawns (forward only, 2-step start, diagonal capture).
+
+Path Validation: You have the isPathClear engine which prevents "ghost moves" (except for Knights), but we still need to apply specific movement shapes for Rooks, Bishops, and Queens.
+
+Folder Architecture: You have the high-level roadmap for the frontend and backend split, but the backend implementation is pending.

@@ -1,0 +1,52 @@
+.chess-board {
+    display: flex;
+    flex-direction: column;
+    width: 85vmin;
+    /* Slightly bigger as requested */
+    height: 85vmin;
+    border: 4px solid #333;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    user-select: none;
+}
+
+.board-row {
+    display: flex;
+    flex: 1;
+}
+
+.square {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    /* This adds the "lining" back */
+    border: 0.1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Restoring the Tile Colors */
+.square.light {
+    background-color: #f0d9b5;
+}
+
+.square.dark {
+    background-color: #b58863;
+}
+
+/* Selection Highlight (Requirement C.4) */
+.square.selected {
+    background-color: #bbc944 !important;
+}
+
+.piece-unicode {
+    font-size: 8vmin;
+    line-height: 1;
+    /* Shadow makes white pieces pop on light squares */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.piece-image {
+    width: 85%;
+    height: 85%;
+}

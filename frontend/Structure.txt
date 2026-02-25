@@ -1,0 +1,15 @@
+frontend/src/
+├── assets/           
+├── components/        
+│   ├── Board/        
+│   ├── Interaction/  
+│   ├── Navigation/     
+│   └── Feedback/       
+├── engine/             
+│   ├── rules.js        
+│   ├── ai.js          
+│   └── scoring.js      
+├── hooks/             
+├── services/           
+├── App.jsx             
+└── main.jsx           
