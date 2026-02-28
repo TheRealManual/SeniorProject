@@ -71,3 +71,11 @@ app.post('/api/chess/analyze', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
+<<<<<<< HEAD
+
+// A simple health check route to verify backend connectivity from the frontend
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'connected' });
+});
+=======
+>>>>>>> upstream/main
