@@ -58,6 +58,30 @@ body {
   max-width: 400px;
 }
 
+/* Test status and result styles */
+.test-status {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.test-error {
+  color: #f44336;
+}
+
+.test-result {
+  background: #1a1a1a;
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  text-align: left;
+  font-size: 1rem;
+  max-width: 400px;
+}
+
+.test-result p {
+  margin: 0.3rem 0;
+}
+
 button {
   padding: 1rem 2rem;
   font-size: 1.2rem;
@@ -200,47 +224,4 @@ button:hover {
   100% {
     opacity: 1;
   }
-}
-=======
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

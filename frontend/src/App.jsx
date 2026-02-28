@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-import { useState, useEffect } from 'react' // Added useEffect here
+import { useState, useEffect } from 'react'
 import Board from './components/Board'
 import { initialBoard, isPathClear, isValidMove } from './engine/chessLogic'
 import './App.css'
@@ -12,6 +11,12 @@ function App() {
     const [turn, setTurn] = useState('white');
     const [errorPopup, setErrorPopup] = useState({ message: '', visible: false });
     const [backendStatus, setBackendStatus] = useState('loading');
+    const [connectionTest, setConnectionTest] = useState({ status: '', loading: false });
+    const [chessTest, setChessTest] = useState({ result: null, loading: false, error: '' });
+
+    const apiUrl = import.meta.env.MODE === 'development'
+        ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
+        : import.meta.env.VITE_API_URL_PROD;
 
     // 2. HELPER FUNCTIONS
     const triggerError = (msg) => {
@@ -21,8 +26,7 @@ function App() {
 
     const checkConnection = async () => {
         try {
-            // Note: Your server.js is running on PORT 3001, so we use 3001 here
-            const response = await fetch('http://localhost:3001/api/health');
+            const response = await fetch(`${apiUrl}/api/health`);
             if (response.ok) {
                 setBackendStatus('connected');
             } else {
@@ -30,6 +34,46 @@ function App() {
             }
         } catch (error) {
             setBackendStatus('error');
+        }
+    };
+
+    const testBackendConnection = async () => {
+        setConnectionTest({ status: '', loading: true });
+        try {
+            const response = await fetch(`${apiUrl}/api/status`);
+            if (response.ok) {
+                setConnectionTest({ status: 'Connected to backend!', loading: false });
+            } else {
+                setConnectionTest({ status: 'Backend responded but with an error', loading: false });
+            }
+        } catch (error) {
+            setConnectionTest({ status: 'Could not connect to backend', loading: false });
+        }
+    };
+
+    const testChessAI = async () => {
+        setChessTest({ result: null, loading: true, error: '' });
+        try {
+            const healthRes = await fetch(`${apiUrl}/api/chess/health`);
+            const health = await healthRes.json();
+            if (!healthRes.ok || health.error) {
+                setChessTest({ result: null, loading: false, error: health.error || 'Chess AI health check failed' });
+                return;
+            }
+            const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+            const moveRes = await fetch(`${apiUrl}/api/chess/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
+            });
+            const moveData = await moveRes.json();
+            if (!moveRes.ok) {
+                setChessTest({ result: null, loading: false, error: moveData.error || 'Failed to get move' });
+                return;
+            }
+            setChessTest({ result: moveData, loading: false, error: '' });
+        } catch (error) {
+            setChessTest({ result: null, loading: false, error: 'Could not connect to Chess AI' });
         }
     };
 
@@ -105,7 +149,27 @@ function App() {
                     <div className="menu-buttons">
                         <button onClick={() => setView('game')}>Start Chess Game</button>
                         <button onClick={() => setView('training')}>Training Mode</button>
+                        <button onClick={testBackendConnection} disabled={connectionTest.loading}>
+                            {connectionTest.loading ? 'Checking...' : 'Check Backend Connection'}
+                        </button>
+                        <button onClick={testChessAI} disabled={chessTest.loading}>
+                            {chessTest.loading ? 'Thinking...' : 'Test Chess AI'}
+                        </button>
                     </div>
+                    {connectionTest.status && (
+                        <p className="test-status">{connectionTest.status}</p>
+                    )}
+                    {chessTest.error && (
+                        <p className="test-status test-error">{chessTest.error}</p>
+                    )}
+                    {chessTest.result && (
+                        <div className="test-result">
+                            <p><strong>Move:</strong> {chessTest.result.move}</p>
+                            <p><strong>Eval:</strong> {chessTest.result.value}</p>
+                            <p><strong>Confidence:</strong> {(chessTest.result.confidence * 100).toFixed(1)}%</p>
+                            <p><strong>Think time:</strong> {chessTest.result.think_time_ms}ms</p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -132,112 +196,3 @@ function App() {
 }
 
 export default App;
-=======
-import { useState } from 'react'
-import './App.css'
-
-function App() {
-  const [status, setStatus] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [chessResult, setChessResult] = useState(null)
-  const [chessLoading, setChessLoading] = useState(false)
-  const [chessError, setChessError] = useState('')
-
-  const apiUrl = import.meta.env.MODE === 'development' 
-    ? import.meta.env.VITE_API_URL_DEV 
-    : import.meta.env.VITE_API_URL_PROD
-
-  const checkConnection = async () => {
-    setLoading(true)
-    setStatus('')
-    
-    try {
-      const response = await fetch(`${apiUrl}/api/status`)
-      const data = await response.json()
-      
-      if (response.ok) {
-        setStatus('Connected to backend!')
-      } else {
-        setStatus('Backend responded but with an error')
-      }
-    } catch (error) {
-      setStatus('Could not connect to backend')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const testChessAI = async () => {
-    setChessLoading(true)
-    setChessResult(null)
-    setChessError('')
-
-    try {
-      const healthRes = await fetch(`${apiUrl}/api/chess/health`)
-      const health = await healthRes.json()
-
-      if (!healthRes.ok || health.error) {
-        setChessError(health.error || 'Chess AI health check failed')
-        return
-      }
-
-      const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-      const moveRes = await fetch(`${apiUrl}/api/chess/move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
-      })
-      const moveData = await moveRes.json()
-
-      if (!moveRes.ok) {
-        setChessError(moveData.error || 'Failed to get move')
-        return
-      }
-
-      setChessResult(moveData)
-    } catch (error) {
-      setChessError('Could not connect to Chess AI')
-    } finally {
-      setChessLoading(false)
-    }
-  }
-
-  return (
-    <div style={{ padding: '50px', textAlign: 'center' }}>
-      <h1>Senior Project</h1>
-
-      <div style={{ marginBottom: '30px' }}>
-        <button 
-          onClick={checkConnection} 
-          disabled={loading}
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}
-        >
-          {loading ? 'Checking...' : 'Check Connection to Backend'}
-        </button>
-        {status && <p style={{ marginTop: '10px', fontSize: '18px' }}>{status}</p>}
-      </div>
-
-      <div>
-        <button 
-          onClick={testChessAI} 
-          disabled={chessLoading}
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}
-        >
-          {chessLoading ? 'Thinking...' : 'Test Chess AI'}
-        </button>
-        {chessError && <p style={{ marginTop: '10px', fontSize: '18px', color: '#e74c3c' }}>{chessError}</p>}
-        {chessResult && (
-          <div style={{ marginTop: '15px', fontSize: '16px', textAlign: 'left', display: 'inline-block' }}>
-            <p><strong>Move:</strong> {chessResult.move}</p>
-            <p><strong>Eval:</strong> {chessResult.value}</p>
-            <p><strong>Confidence:</strong> {(chessResult.confidence * 100).toFixed(1)}%</p>
-            <p><strong>Think time:</strong> {chessResult.think_time_ms}ms</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export default App
->>>>>>> upstream/main
