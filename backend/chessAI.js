@@ -1,3 +1,6 @@
+// Use native fetch (Node 18+) or fall back to node-fetch for older runtimes
+const fetch = globalThis.fetch || require('node-fetch')
+
 const CHESS_AI_API_URL = process.env.CHESS_AI_API_URL
 
 async function healthCheck() {
