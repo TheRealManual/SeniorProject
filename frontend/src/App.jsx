@@ -18,10 +18,8 @@ function App() {
         ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
         : import.meta.env.VITE_API_URL_PROD;
 
-    // In dev, proxy chess AI calls through the backend to avoid CORS issues
-    const chessAPIUrl = import.meta.env.MODE === 'development'
-        ? apiUrl
-        : (import.meta.env.VITE_CHESS_AI_API_URL || apiUrl);
+    // Chess AI service URL
+    const chessAPIUrl = import.meta.env.VITE_CHESS_AI_API_URL;
     // 2. HELPER FUNCTIONS
     const triggerError = (msg) => {
         setErrorPopup({ message: msg, visible: true });
@@ -58,14 +56,14 @@ function App() {
     const testChessAI = async () => {
         setChessTest({ result: null, loading: true, error: '' });
         try {
-            const healthRes = await fetch(`${chessAPIUrl}/api/chess/health`);
+            const healthRes = await fetch(`${chessAPIUrl}/api/health`);
             const health = await healthRes.json();
             if (!healthRes.ok || health.error) {
                 setChessTest({ result: null, loading: false, error: health.error || 'Chess AI health check failed' });
                 return;
             }
             const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            const moveRes = await fetch(`${chessAPIUrl}/api/chess/move`, {
+            const moveRes = await fetch(`${chessAPIUrl}/api/move`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
