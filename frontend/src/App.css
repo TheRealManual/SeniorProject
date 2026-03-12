@@ -102,22 +102,26 @@ button:hover {
 /* Game View - Full screen layout */
 .game-view {
   width: 100vw;
-  min-height: 100vh;
-  /* Changed from height to min-height */
+  height: 100vh;
+  /* Changed from min-height to height */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  /* Align from top, not center */
   align-items: center;
-  gap: 15px;
-  padding-top: 20px;
-  overflow-y: auto;
-  /* Allows scrolling if the screen is small */
+  gap: 10px;
+  /* Reduced gap */
+  padding: 10px 0;
+  /* Reduced padding */
+  overflow: hidden;
+  /* This removes the scrollbar */
 }
 
 .game-header {
-  width: 80vmin;
-  /* Matches the board width for alignment */
+  width: 90%;
+  /* Let it take more width */
+  max-width: 1000px;
+  height: 60px;
+  /* Fixed height for header */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -352,15 +356,16 @@ button:hover {
 .game-layout {
   display: flex;
   flex-direction: row;
-  /* Sits items side-by-side */
-  align-items: flex-start;
+  align-items: center;
+  /* Center HUD and Board together */
   justify-content: center;
-  gap: 30px;
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
+  gap: 15px;
+  /* Half the original gap */
+  width: 100%;
+  height: calc(100vh - 100px);
+  /* Fill the rest of the screen minus header */
+  padding: 0 10px;
 }
-
 /* The Sidebar */
 .side-hud {
   display: flex;
@@ -368,10 +373,14 @@ button:hover {
   background: #1a1a1a;
   border: 2px solid #333;
   border-radius: 12px;
-  padding: 20px;
-  width: 200px;
-  /* Fixed width for the sidebar */
-  gap: 20px;
+  padding: 15px;
+  width: 180px;
+  /* Slimmer sidebar */
+  gap: 10px;
+  max-height: 90%;
+  /* Prevent HUD from being taller than the board */
+  overflow-y: auto;
+  /* HUD can scroll internally if needed */
 }
 
 .stat-box {
@@ -379,14 +388,14 @@ button:hover {
 }
 
 .score-val {
-  font-size: 2.5rem;
+  font-size: 1.5rem;
   color: #4CAF50;
   font-weight: bold;
   display: block;
 }
 
 .time-val {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-family: monospace;
   display: block;
   margin-bottom: 10px;
@@ -429,13 +438,14 @@ button:hover {
 @media (max-width: 800px) {
   .game-layout {
     flex-direction: column;
+    /* Stack HUD under the board */
     align-items: center;
   }
 
-  .side-hud {
-    width: 100%;
-    flex-direction: row;
-    justify-content: space-around;
+  .board-container {
+    width: 95vmin;
+    /* Use more of the screen on mobile */
+    height: 95vmin;
   }
 }
 
@@ -499,12 +509,12 @@ button:hover {
   /* Dark grey looks better than pure black */
 }
 
+/* 4. The Pieces - Scale with the square */
 .piece-unicode {
-  font-size: 45px;
-  /* Makes the pieces on the board fill the square */
-  cursor: grab;
-  user-select: none;
-  /* Prevents users from "highlighting" the text */
+  font-size: 7vmin;
+  /* Pieces grow/shrink with the board */
+  /* If pieces get too big/small, use a cap: */
+  font-size: clamp(24px, 7vmin, 50px);
 }
 
 .highlight-btn {
@@ -556,11 +566,13 @@ button:hover {
   }
 }
 
+/* 3. The Squares */
 .square {
-  width: 80px;
-  height: 80px;
-  box-sizing: border-box;
-  /* Keeps everything perfectly square */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Updated Colors to match your tan/brown theme */
@@ -593,33 +605,31 @@ button:hover {
   pointer-events: none;
 }
 
+/* 1. The Container - No more fixed 660px */
 .board-container {
   position: relative;
-  /* Use 640px + 20px (for both borders) = 660px */
-  width: 660px;
-  height: 660px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  /* Reduced from 85vmin to 70vmin to prevent vertical overflow */
+  width: 90vmin;
+  height: 85vmin;
+  max-width: 550px;
+  max-height: 550px;
   background-color: #2c3e50;
-  /* This ensures the background matches your border */
+  border: 1vmin solid #2c3e50;
   border-radius: 8px;
-  margin: 0 auto;
+  margin: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
+/* 2. The Board - Use Grid with 'fr' units */
 .chess-board {
   display: grid;
-  grid-template-columns: repeat(8, 80px);
-  width: 660px;
-  height: 660px;
-  /* Remove the border from here and let the container handle it, 
-     OR keep it but use the rule below: */
-  border: 10px solid #2c3e50;
-  box-sizing: border-box;
-  /* THIS IS THE KEY */
-  overflow: hidden;
-  /* Ensures no internal elements spill out */
+  /* 8 equal columns that fill the container */
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 
 .game-over-overlay {
@@ -638,7 +648,7 @@ button:hover {
 }
 
 .big-x {
-  font-size: 180px;
+  font-size: 30vmin;
   line-height: 1;
   margin: 0;
   filter: drop-shadow(0 0 30px rgba(255, 0, 0, 0.8));
