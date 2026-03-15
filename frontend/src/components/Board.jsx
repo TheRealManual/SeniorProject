@@ -4,6 +4,12 @@ import './Board.css';
 
 const Board = ({ board, selectedSquare, onSquareClick, highlightedSquares = [] }) => {
 
+    // Inside Board.jsx
+    if (highlightedSquares.length > 0) {
+        console.log("HIGHLIGHT DATA CHECK:", highlightedSquares[0]);
+        console.log("EXPECTED KEYS: row, col");
+    }
+
     const renderPiece = (piece) => {
         if (!piece) return null;
 
@@ -27,6 +33,7 @@ const Board = ({ board, selectedSquare, onSquareClick, highlightedSquares = [] }
                 </span>
             </div>
         );
+
     };
 
     return (
@@ -47,6 +54,8 @@ const Board = ({ board, selectedSquare, onSquareClick, highlightedSquares = [] }
                             key={`${rowIndex}-${colIndex}`}
                             className={`square ${light ? 'light-square' : 'dark-square'} ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
                             onClick={() => onSquareClick(rowIndex, colIndex)}
+                            /* THIS LINE FORCES A STYLE IF THE LOGIC IS TRUE */
+                            style={isHighlighted ? { border: '5px solid red', backgroundColor: 'red', zIndex: 1000 } : {}}
                         >
                             {renderPiece(piece)}
                         </div>

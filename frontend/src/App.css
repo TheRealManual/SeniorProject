@@ -266,28 +266,28 @@ button:hover {
 }
 
 .lobby-view {
-    text-align: center;
-    padding: 20px;
-    animation: fadeIn 0.4s ease-in;
+  text-align: center;
+  padding: 20px;
+  animation: fadeIn 0.4s ease-in;
 }
 
 .menu-divider {
-    width: 80%;
-    border: 0;
-    border-top: 1px solid #444;
-    margin: 20px auto;
+  width: 80%;
+  border: 0;
+  border-top: 1px solid #444;
+  margin: 20px auto;
 }
 
 .back-btn {
-    margin-top: 20px;
-    background-color: transparent;
-    color: #888;
-    border: 1px solid #444;
+  margin-top: 20px;
+  background-color: transparent;
+  color: #888;
+  border: 1px solid #444;
 }
 
 .back-btn:hover {
-    color: white;
-    border-color: white;
+  color: white;
+  border-color: white;
 }
 
 .menu-divider {
@@ -366,6 +366,7 @@ button:hover {
   /* Fill the rest of the screen minus header */
   padding: 0 10px;
 }
+
 /* The Sidebar */
 .side-hud {
   display: flex;
@@ -471,6 +472,23 @@ button:hover {
   gap: 2px;
 }
 
+.captured-section {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 30px;
+  font-size: 1.5rem;
+  color: #ffd700;
+  /* Matching that gold/yellow look in your screenshot */
+}
+
 .captured-icon {
   font-size: 1.2rem;
   color: #fff;
@@ -533,22 +551,6 @@ button:hover {
   background: #357abd;
 }
 
-/* This class needs to be applied inside your Square component based on the highlightedSquares prop */
-.square.highlighted {
-  position: relative;
-}
-
-.square.highlighted::after {
-  content: '';
-  position: absolute;
-  width: 30%;
-  height: 30%;
-  background: rgba(74, 144, 226, 0.6);
-  border-radius: 50%;
-  box-shadow: 0 0 15px 5px rgba(74, 144, 226, 0.4);
-  animation: pulse-glow 1.5s infinite;
-}
-
 @keyframes pulse-glow {
   0% {
     transform: scale(1);
@@ -589,20 +591,15 @@ button:hover {
   background-color: rgba(255, 255, 0, 0.5) !important;
 }
 
-/* Glow for the 'Highlight' button moves */
-.square.highlighted::after {
-  width: 25px;
-  height: 25px;
-  background: rgba(46, 204, 113, 0.6);
-  /* A slightly nicer green */
-}
+
 
 .piece-image {
-  /* Scaling the pieces to match the bigger squares */
-  width: 70px;
-  height: 70px;
-  z-index: 2;
+  width: 85%;
+  height: 85%;
+  z-index: 5;
+  position: relative;
   pointer-events: none;
+  /* Add this */
 }
 
 /* 1. The Container - No more fixed 660px */
@@ -695,4 +692,189 @@ button:hover {
   100% {
     transform: scale(1);
   }
+}
+
+.retry-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-left: 5px;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.auth-shell {
+  padding: 1rem;
+}
+
+.auth-card {
+  width: min(90vw, 420px);
+  padding: 2rem;
+  border-radius: 14px;
+  background: #1a1a1a;
+  border: 1px solid #2f2f2f;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-card h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--accent-color);
+}
+
+.auth-subtitle {
+  margin: 0;
+  color: #bfbfbf;
+  font-size: 0.95rem;
+}
+
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.auth-switch button {
+  background: #2a2a2a;
+  border: 1px solid #404040;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.auth-switch button.active {
+  background: var(--accent-color);
+  color: #09110a;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.auth-divider {
+  color: #949494;
+  font-size: 0.9rem;
+}
+
+.discord-btn {
+  background: #5865f2;
+  color: #fff;
+}
+
+.discord-btn:hover {
+  background: #6a76f5;
+}
+
+@media (max-width: 640px) {
+  .home-page h1 {
+    font-size: 2.2rem;
+  }
+
+  .auth-card {
+    padding: 1.2rem;
+  }
+}
+
+/* 1. The Square Background Glow */
+.square.highlighted {
+  position: relative;
+  /* !important ensures the tan/brown background doesn't hide this */
+  background-color: rgba(46, 204, 113, 0.5) !important;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+/* 2. The Animated Green Dot */
+.square.highlighted::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  /* Slightly bigger to be seen under pieces */
+  height: 26px;
+  background: #2ecc71 !important;
+  /* Vivid green */
+  border-radius: 50%;
+  box-shadow: 0 0 20px 8px rgba(46, 204, 113, 0.7);
+  animation: hint-pulse 1.2s infinite ease-in-out;
+  pointer-events: none;
+  /* z-index 10 puts it ON TOP of the piece images */
+  z-index: 10;
+}
+
+@keyframes hint-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.7;
+  }
+}
+
+.message-container {
+  height: 40px;
+  /* Keeps layout stable even when message is empty */
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.status-toast {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+}
+
+.white-turn {
+  border-left: 5px solid #fff;
+}
+
+.black-turn {
+  border-left: 5px solid #555;
+}
+
+.training-hud .piece-list {
+  max-width: 250px;
+  /* Limits width so it doesn't push the HUD too wide */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.training-hud .captured-icon {
+  font-size: 1.2rem;
+  /* Slightly smaller for the side HUD */
+  margin-right: -5px;
+  /* "Stacks" them slightly like real chess broadcasts */
 }

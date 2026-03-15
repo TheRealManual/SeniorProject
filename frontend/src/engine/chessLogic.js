@@ -121,3 +121,60 @@ export const isValidMove = (startRow, startCol, endRow, endCol, piece, board) =>
     // For now, we will allow all other pieces to move normally until we add their rules
     return false;
 };
+
+/**
+ * Converts a 2D board array to a FEN string.
+ * @param {Array} board - Your current 8x8 board state
+ * @param {string} turn - 'white' or 'black'
+ */
+export const boardToFen = (board, turn) => {
+    let fen = "";
+
+    for (let r = 0; r < 8; r++) {
+        let emptySquares = 0;
+        for (let c = 0; c < 8; c++) {
+            const piece = board[r][c];
+            if (piece === null) {
+                emptySquares++;
+            } else {
+                if (emptySquares > 0) {
+                    fen += emptySquares;
+                    emptySquares = 0;
+                }
+                fen += piece;
+            }
+        }
+        if (emptySquares > 0) {
+            fen += emptySquares;
+        }
+        if (r < 7) fen += "/";
+    }
+
+    // Add turn: 'w' for white, 'b' for black
+    fen += ` ${turn === 'white' ? 'w' : 'b'}`;
+
+    // Simplified: No castling rights or en passant for now
+    fen += " - - 0 1";
+
+    return fen;
+};
+
+/**
+ * Converts algebraic move (e.g., "e2e4") to coordinates
+ * @param {string} moveStr - e.g., "e2e4"
+ * @returns {object} { from: {r, c}, to: {r, c} }
+ */
+export const parseAlgebraic = (moveStr) => {
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+    const fromCol = files.indexOf(moveStr[0]);
+    const fromRow = 8 - parseInt(moveStr[1]);
+
+    const toCol = files.indexOf(moveStr[2]);
+    const toRow = 8 - parseInt(moveStr[3]);
+
+    return {
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol }
+    };
+};

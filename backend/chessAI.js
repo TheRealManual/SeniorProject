@@ -1,6 +1,6 @@
-const CHESS_AI_API_URL = process.env.CHESS_AI_API_URL
+const CHESS_AI_API_URL = import.meta.env.VITE_CHESS_AI_API_URL;
 
-async function healthCheck() {
+export async function healthCheck() {
   if (!CHESS_AI_API_URL) {
     return { status: 'error', message: 'CHESS_AI_API_URL not configured' }
   }
@@ -9,7 +9,7 @@ async function healthCheck() {
   return res.json()
 }
 
-async function getMove(fen, difficulty = 'medium') {
+export async function getMove(fen, difficulty = 'medium') {
   if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
 
   const res = await fetch(`${CHESS_AI_API_URL}/api/move`, {
@@ -25,7 +25,7 @@ async function getMove(fen, difficulty = 'medium') {
   return res.json()
 }
 
-async function evaluate(fen) {
+export async function evaluate(fen) {
   if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
 
   const res = await fetch(`${CHESS_AI_API_URL}/api/evaluate`, {
@@ -41,7 +41,7 @@ async function evaluate(fen) {
   return res.json()
 }
 
-async function analyze(fen, numSims = 400) {
+export async function analyze(fen, numSims = 400) {
   if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
 
   const res = await fetch(`${CHESS_AI_API_URL}/api/analyze`, {
@@ -57,4 +57,3 @@ async function analyze(fen, numSims = 400) {
   return res.json()
 }
 
-module.exports = { healthCheck, getMove, evaluate, analyze }
