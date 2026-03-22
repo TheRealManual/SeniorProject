@@ -356,15 +356,15 @@ button:hover {
 .game-layout {
   display: flex;
   flex-direction: row;
-  align-items: center;
-  /* Center HUD and Board together */
+  align-items: stretch;
   justify-content: center;
   gap: 15px;
-  /* Half the original gap */
   width: 100%;
+  /* Takes full height minus the header (60px) and some padding */
   height: calc(100vh - 100px);
-  /* Fill the rest of the screen minus header */
-  padding: 0 10px;
+  max-height: 700px;
+  padding: 0 10px 10px 10px;
+  box-sizing: border-box;
 }
 
 /* The Sidebar */
@@ -374,18 +374,29 @@ button:hover {
   background: #1a1a1a;
   border: 2px solid #333;
   border-radius: 12px;
-  padding: 15px;
-  width: 180px;
-  /* Slimmer sidebar */
+  padding: 12px;
+  width: 220px;
+  /* Increased slightly for longer names */
   gap: 10px;
-  max-height: 90%;
-  /* Prevent HUD from being taller than the board */
-  overflow-y: auto;
-  /* HUD can scroll internally if needed */
+  height: 100%;
+  /* Changed from 90% to fill the layout */
+  overflow: hidden;
+  /* Prevent the whole sidebar from scrolling */
+  box-sizing: border-box;
 }
 
-.stat-box {
-  text-align: center;
+/* Ensure names don't overflow the container */
+.side-hud p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 5px 0;
+}
+
+.stat-box,
+.timer-container,
+.highlight-btn {
+  flex-shrink: 0;
 }
 
 .score-val {
@@ -405,10 +416,10 @@ button:hover {
 /* Vertical Progress Bar */
 .progress-container-vertical {
   width: 20px;
-  height: 150px;
+  height: 100px;
   background: #333;
   border-radius: 10px;
-  margin: 0 auto;
+  margin: 5px auto;
   position: relative;
   overflow: hidden;
 }
@@ -473,10 +484,14 @@ button:hover {
 }
 
 .captured-section {
-  margin-top: 20px;
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  justify-content: flex-end;
+  /* Keeps captured pieces at the bottom */
+  gap: 8px;
+  min-height: 0;
+  /* Important for flex-grow to work properly */
 }
 
 .piece-list {
@@ -544,11 +559,30 @@ button:hover {
   font-weight: bold;
   cursor: pointer;
   border: none;
-  transition: background 0.3s;
+  transition: all 0.3s;
+  /* Add the animation here */
+  animation: button-pulse 2s infinite;
 }
 
 .highlight-btn:hover {
   background: #357abd;
+  animation: none;
+  /* Stop pulsing when hovering */
+  transform: scale(1.02);
+}
+
+@keyframes button-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+  }
 }
 
 @keyframes pulse-glow {
@@ -605,17 +639,20 @@ button:hover {
 /* 1. The Container - No more fixed 660px */
 .board-container {
   position: relative;
-  /* Reduced from 85vmin to 70vmin to prevent vertical overflow */
-  width: 90vmin;
-  height: 85vmin;
+  height: 100%;
+  /* Let the game-layout height (700px max) dictate the size */
+  aspect-ratio: 1 / 1;
+  /* This forces it to remain a square */
   max-width: 550px;
   max-height: 550px;
   background-color: #2c3e50;
-  border: 1vmin solid #2c3e50;
+  border: 4px solid #2c3e50;
+  /* Changed from 1vmin to pixels for stability */
   border-radius: 8px;
   margin: 0;
   overflow: hidden;
   box-sizing: border-box;
+  flex-shrink: 1;
 }
 
 /* 2. The Board - Use Grid with 'fr' units */

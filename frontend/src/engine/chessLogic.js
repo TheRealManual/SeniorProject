@@ -11,15 +11,17 @@ export const initialBoard = [
 
 export const isLightSquare = (row, col) => (row + col) % 2 === 0;
 
-export const getUnicodePiece = (piece) => {
-    if (!piece) return '';
-    const symbols = {
-        // White Pieces
-        'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
-        // Black Pieces
-        'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'
+export const getUnicodePiece = (type) => {
+    if (!type) return '';
+    const pieces = {
+        p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚'
     };
-    return symbols[piece] || '';
+    return pieces[type.toLowerCase()] || '';
+};
+
+const coordsToAlgebraic = (row, col) => {
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    return letters[col] + (8 - row);
 };
 
 export const isPathClear = (startRow, startCol, endRow, endCol, board) => {

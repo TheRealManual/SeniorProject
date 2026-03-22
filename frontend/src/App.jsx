@@ -1,14 +1,30 @@
 import { useState, useEffect } from 'react'
 import Board from './components/Board'
-import { initialBoard, isPathClear, isValidMove, getUnicodePiece, boardToFen, parseAlgebraic} from './engine/chessLogic'
 import { getMove, analyze, evaluate } from '../../backend/chessAI';
+import {Chess } from 'chess.js';
 import './App.css'
 
+
+const getUnicodePiece = (type) => {
+  if (!type) return '';
+  // chess.js uses lowercase for piece types (p, n, b, r, q, k)
+  const pieces = {
+    p: '♟',
+    n: '♞',
+    b: '♝',
+    r: '♜',
+    q: '♛',
+    k: '♚'
+  };
+  return pieces[type.toLowerCase()] || '';
+};
 
 function App() {
   // --- 1. STATES ---
   const [view, setView] = useState('home');
-  const [board, setBoard] = useState(initialBoard);
+
+  const [game] = useState(new Chess());
+  const [board, setBoard] = useState(game.board()); // Use the same 'game' instance
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [turn, setTurn] = useState('white');
   const [errorPopup, setErrorPopup] = useState({ message: '', visible: false });
@@ -25,6 +41,7 @@ function App() {
   const [loadingHint, setLoadingHint] = useState(false);
   const [currentEval, setCurrentEval] = useState('0.0');
   const [isAiThinking, setIsAiThinking] = useState(false); // Useful for "Training" mode AI turns
+  const [difficulty, setDifficulty] = useState('medium'); // Default to medium
   // Inside App.jsx, near line 20-30
   const [gameMessage, setGameMessage] = useState("White's Turn"); // <-- Add this here
   // AUTH STATES
@@ -49,6 +66,16 @@ function App() {
     setTimeout(() => setErrorPopup({ message: '', visible: false }), 2000);
   };
 
+  const extractMoveFromAI = (data) => {
+    if (data.moves && data.moves.length > 0) return data.moves[0].move;
+    return data.move || data.best_move || null;
+  };
+
+  const coordsToAlgebraic = (row, col) => {
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    return letters[col] + (8 - row);
+  };
+
   const checkConnection = async () => {
     try {
       const response = await fetch(`${apiUrl}/api/health`);
@@ -57,7 +84,8 @@ function App() {
   };
 
   const resetMiniGame = () => {
-    setBoard(initialBoard);
+    game.reset(); // Library reset
+    setBoard([...game.board().map(row => [...row])])
     setTurn('white');
     setSelectedSquare(null);
     setHighlightedSquares([]);
@@ -66,6 +94,10 @@ function App() {
     setIsGameOver(false);
     setCapturedByWhite([]);
     setCapturedByBlack([]);
+    setGameMessage("White's Turn");
+
+    const playerName = user?.username || user?.email || "White";
+    setGameMessage(`${playerName}'s Turn`);
   };
 
   // --- 3. AUTH LOGIC ---
@@ -113,20 +145,6 @@ function App() {
     finally { setAuthLoading(false); }
   };
 
-  const executeMove = (from, to) => {
-    const newBoard = board.map(row => [...row]);
-    const piece = newBoard[from.row][from.col];
-
-    // 1. Move the piece
-    newBoard[to.row][to.col] = piece;
-    newBoard[from.row][from.col] = null;
-
-    // 2. Update board and switch turn
-    setBoard(newBoard);
-    setTurn('white');
-    setHighlightedSquares([]); // Clear AI highlights
-  };
-
   const testChessAI = async () => {
     setChessTest({ result: null, loading: true, error: '' });
     try {
@@ -151,6 +169,72 @@ function App() {
     } catch {
       setChessTest({ result: null, loading: false, error: 'Could not connect to Chess AI' });
     }
+  };
+
+  const calculateHighlights = (move) => {
+    // 1. Guard Clause: If move is null/undefined, return empty array
+    if (!move) return [];
+
+    let fromStr, toStr;
+
+    // 2. Handle Object Format (e.g., { from: 'e2', to: 'e4' })
+    if (typeof move === 'object' && move.from && move.to) {
+      fromStr = move.from;
+      toStr = move.to;
+    }
+    // 3. Handle String Format (e.g., "e2e4")
+    else if (typeof move === 'string' && move.length >= 4) {
+      fromStr = move.substring(0, 2);
+      toStr = move.substring(2, 4);
+    }
+    else {
+      return []; // Fallback for unexpected data
+    }
+
+    // Convert "e2" -> {row: 6, col: 4}
+    const fromCoords = algebraicToCoords(fromStr);
+    const toCoords = algebraicToCoords(toStr);
+
+    return [fromCoords, toCoords];
+  };
+
+  const handleHighlightClick = async () => {
+    console.log("Fetching hint from AI...");
+    try {
+      const currentFen = game.fen();
+      const data = await analyze(currentFen);
+      console.log("FULL AI DATA:", data);
+
+      // 1. Check if the 'moves' array exists and has at least one item
+      let moveToShow;
+      // Change this line in handleHighlightClick:
+      if (data.moves && data.moves.length > 0) {
+        // We need data.moves[0].move to get 'd2d4'
+        moveToShow = data.moves[0].move;
+        console.log("Extracted String for Highlight:", moveToShow);
+      }
+
+      if (moveToShow) {
+        // 2. Calculate the coordinates and update state
+        const highlights = calculateHighlights(moveToShow);
+        setHighlightedSquares(highlights);
+      } else {
+        console.warn("AI returned an empty moves array.");
+      }
+    } catch (error) {
+      console.error("Failed to get highlights:", error);
+    }
+  };
+
+  // You will also need the inverse of your previous helper:
+  const algebraicToCoords = (algebraic) => {
+    if (!algebraic || algebraic.length < 2) return { row: 0, col: 0 };
+
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const col = letters.indexOf(algebraic[0]);
+    const row = 8 - parseInt(algebraic[1]);
+
+    return { row, col };
   };
 
   const parseAlgebraic = (moveStr) => {
@@ -179,30 +263,6 @@ function App() {
     }
   };
 
-  const calculateHighlights = () => {
-    if (!selectedSquare) return;
-    const { row: startRow, col: startCol } = selectedSquare;
-    const piece = board[startRow][startCol];
-    const validMoves = [];
-
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        if (isValidMove(startRow, startCol, r, c, piece, board)) {
-          if (piece.toLowerCase() === 'n' || isPathClear(startRow, startCol, r, c, board)) {
-            const targetPiece = board[r][c];
-            if (targetPiece) {
-              const isMovingWhite = piece === piece.toUpperCase();
-              const isTargetWhite = targetPiece === targetPiece.toUpperCase();
-              if (isMovingWhite === isTargetWhite) continue;
-            }
-            validMoves.push({ row: r, col: c });
-          }
-        }
-      }
-    }
-    setHighlightedSquares(validMoves);
-  };
-
   // --- 4. EFFECTS ---
   useEffect(() => { verifySession(); }, []);
   useEffect(() => {
@@ -210,6 +270,37 @@ function App() {
     const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // --- INACTIVITY TIMEOUT LOGIC ---
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      timeoutId = setTimeout(() => {
+        console.log("Inactivity limit reached. Logging out...");
+        triggerError("Logged out due to inactivity"); // Optional: let the user know why
+        clearAuth();
+      }, 10 * 60 * 1000);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [user]); // Re-run if the user logs in or out
 
   useEffect(() => {
     let timer;
@@ -227,135 +318,159 @@ function App() {
 
   useEffect(() => {
     const makeAiMove = async () => {
-      if (view === 'training' && turn === 'black' && !isGameOver) {
-        setGameMessage("AI is thinking...");
-        setIsAiThinking(true);
-
-        try {
-          const fen = boardToFen(board, turn);
-          const data = await getMove(fen, 'medium');
-
-          if (data && data.move) {
-            const coords = parseAlgebraic(data.move);
-
-            // Set highlights and DON'T clear them yet
-            setHighlightedSquares([coords.from, coords.to]);
-
-            setTimeout(() => {
-              executeMove(coords.from, coords.to);
-              // The highlights are cleared INSIDE executeMove, 
-              // so they stay visible until the piece actually moves.
-            }, 1000);
-          }
-        } catch (err) {
-          console.error("AI Error:", err);
-          setGameMessage("Connection lost...");
-        } finally {
-          setIsAiThinking(false);
+      if (view !== 'training' || turn !== 'black' || isGameOver || game.isGameOver()) {
+        if (game.isGameOver() && !isGameOver) {
+          setIsGameOver(true);
+          const result = game.isCheckmate() ? "Checkmate! White wins!" : "Game Over: Draw!";
+          setGameMessage(result);
         }
+        return;
+      }
+
+      try {
+        setHighlightedSquares([]);
+        console.log("AI is thinking...");
+        const currentFen = game.fen();
+        const data = await getMove(currentFen, difficulty || 'medium');
+        if (!data) throw new Error("No data received from AI");
+        console.log("AI Move Data received in App.jsx:", data);
+
+        // --- FIX IS HERE ---
+        // We check for 'data.move' (flat object) OR 'data.moves' (array)
+        const bestMove = data.move || (data.moves && data.moves[0]?.move);
+
+        if (bestMove) {
+          console.log("Applying move to board:", bestMove);
+
+          const moveResult = game.move(bestMove);
+
+          if (moveResult) {
+            // --- CAPTURE LOGIC FOR AI ---
+            if (moveResult.captured) {
+              if (moveResult.color === 'b') {
+                setCapturedByBlack(prev => [...prev, moveResult.captured]);
+              } else {
+                setCapturedByWhite(prev => [...prev, moveResult.captured]);
+              }
+            }
+
+            setBoard([...game.board().map(row => [...row])]);
+            setTurn('white');
+            const playerName = user?.username || user?.email || "Your";
+            setGameMessage(`AI moved. ${playerName}'s turn!`);
+
+            const aiHighlights = calculateHighlights(bestMove);
+            setHighlightedSquares(aiHighlights);
+            setTimeout(() => setHighlightedSquares([]), 2000);
+          } else {
+            console.error("Chess.js rejected the move string:", bestMove);
+          }
+        } else {
+          console.error("No move found in AI response data structure:", data);
+        }
+        // --- END OF FIX ---
+
+      } catch (error) {
+        console.error("AI Error in Training Mode:", error);
+        setGameMessage("AI Error. Check console or try again.");
       }
     };
 
-    makeAiMove();
+    const timer = setTimeout(makeAiMove, 500);
+    return () => clearTimeout(timer);
+
   }, [turn, view, isGameOver]);
 
   const handleSquareClick = (row, col) => {
-    // Clear any existing AI hints or glows when the user starts interacting
-    if (!selectedSquare) {
+    if (highlightedSquares.length > 0) {
       setHighlightedSquares([]);
     }
     const piece = board[row][col];
-    if (selectedSquare) {
-      setHighlightedSquares([]);
-      const { row: startRow, col: startCol } = selectedSquare;
-      const movingPieceFull = board[startRow][startCol];
-      const movingPiece = movingPieceFull.toLowerCase();
-      const targetPiece = board[row][col];
 
-      if (startRow === row && startCol === col) {
-        setSelectedSquare(null);
-        return;
-      }
-
-      if (targetPiece) {
-        const isMovingWhite = movingPieceFull === movingPieceFull.toUpperCase();
-        const isTargetWhite = targetPiece === targetPiece.toUpperCase();
-        if (isMovingWhite === isTargetWhite) {
-          setSelectedSquare({ row, col });
-          return;
-        }
-      }
-
-      if (!isValidMove(startRow, startCol, row, col, movingPieceFull, board)) {
-        triggerError(movingPiece === 'p' ? "Pawns can only move forward!" : "Illegal move!");
-        return;
-      }
-
-      if (movingPiece !== 'n' && !isPathClear(startRow, startCol, row, col, board)) {
-        triggerError("Path is blocked!");
-        return;
-      }
-
-      if (targetPiece) {
-        const pieceKey = targetPiece.toLowerCase();
-        if (view === 'timed') {
-          const values = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 100 };
-
-          // Using a fallback (|| 0) in case of unexpected pieces, though ideally this shouldn't happen
-          const points = values[pieceKey] || 0;
-
-          // Using functional updates to ensure state changes don't collide
-          setScore(prev => prev + points);
-          setTimeLeft(prevTime => prevTime + 5);
-
-          console.log('Capture ${pieceKey} for ${points} points.');
-        }
-        turn === 'white'
-          ? setCapturedByWhite(prev => [...prev, targetPiece])
-          : setCapturedByBlack(prev => [...prev, targetPiece]);
-      }
-
-      const newBoard = board.map(r => [...r]);
-      newBoard[row][col] = movingPieceFull;
-      newBoard[startRow][startCol] = null;
-      setBoard(newBoard);
-      setSelectedSquare(null);
-      setTurn(prev => (prev === 'white' ? 'black' : 'white'));
-    } else {
+    // --- 1. SELECTION LOGIC ---
+    if (!selectedSquare) {
       if (piece) {
-        const isWhitePiece = piece === piece.toUpperCase();
-        if ((turn === 'white' && isWhitePiece) || (turn === 'black' && !isWhitePiece)) {
+        const isPlayerColor = (turn === 'white' && piece.color === 'w') ||
+          (turn === 'black' && piece.color === 'b');
+        if (isPlayerColor) {
           setSelectedSquare({ row, col });
+          console.log("Piece Selected:", piece.type, "at", row, col);
         }
+      }
+      return;
+    }
+
+    // --- 2. MOVE EXECUTION LOGIC ---
+    const from = coordsToAlgebraic(selectedSquare.row, selectedSquare.col);
+    const to = coordsToAlgebraic(row, col);
+
+    try {
+      const move = game.move({ from, to, promotion: 'q' });
+
+      if (move) {
+        // --- SNIPPET 1: TIMED MODE SCORE ---
+        if (view === 'timed') {
+          // Increase score: 10 for a move, 50 for a capture
+          setScore(prev => prev + (move.captured ? 50 : 10));
+        }
+
+        // --- CAPTURE LOGIC ---
+        if (move.captured) {
+          if (move.color === 'w') {
+            setCapturedByWhite(prev => [...prev, move.captured]);
+          } else {
+            setCapturedByBlack(prev => [...prev, move.captured]);
+          }
+        }
+
+        const updatedBoard = [...game.board().map(row => [...row])];
+        setBoard(updatedBoard);
+
+        // --- SNIPPET 2: DYNAMIC TURN TOGGLE ---
+        // Instead of setTurn('black'), we calculate the next turn
+        const nextTurn = turn === 'white' ? 'black' : 'white';
+        setTurn(nextTurn);
+
+        const playerName = user?.username || user?.email || "White";
+
+        // Update message based on mode
+        if (view === 'training' && nextTurn === 'black') {
+          setGameMessage("My Turn (AI Thinking...)");
+        } else {
+          const turnName = nextTurn === 'white' ? playerName : "Black";
+          setGameMessage(`${turnName}'s Turn`);
+        }
+
+        setSelectedSquare(null);
+        setHighlightedSquares([]);
+      }
+    } catch (e) {
+      if (piece && ((turn === 'white' && piece.color === 'w') || (turn === 'black' && piece.color === 'b'))) {
+        setSelectedSquare({ row, col });
+      } else {
+        triggerError("Illegal Move!");
+        setSelectedSquare(null);
       }
     }
   };
 
   const handleGetHint = async () => {
-    setLoadingHint(true);
+    console.log("1. Hint Button Clicked");
     try {
-      const fen = boardToFen(board, turn);
-      const data = await analyze(fen);
+      const data = await analyze(game.fen());
+      console.log("2. AI Response:", data); // Is 'move' or 'best_move' in here?
 
-      if (data && data.moves && data.moves.length > 0) {
-        // The AI returns an object like {move: "h2h3", visits: 211...}
-        // We need just the string "h2h3"
-        const bestMoveObj = data.moves[0];
-        const moveStr = typeof bestMoveObj === 'string' ? bestMoveObj : bestMoveObj.move;
-
-        const coords = parseAlgebraic(moveStr);
-
-        if (coords) {
-          console.log("SUCCESS! Coords:", coords);
-          setHighlightedSquares([coords.from, coords.to]);
-          setGameMessage("AI suggests this move!");
-        }
+      let moveToShow;
+      if (data.moves && data.moves.length > 0) {
+        // We want the 'move' string ('d2d4') from the first object in the array
+        moveToShow = data.moves[0].move;
       }
-    } catch (error) {
-      console.error("Hint Error:", error);
-      setGameMessage("Hint service failed.");
-    } finally {
-      setLoadingHint(false);
+
+      const highlights = calculateHighlights(moveToShow);
+      console.log("3. Calculated Coords:", highlights); // This should now show [{row: 6, col: 3}, {row: 4, col: 3}]
+      setHighlightedSquares(highlights);
+    } catch (err) {
+      console.error("Hint Error:", err);
     }
   };
   // --- 5. RENDER ---
@@ -454,6 +569,7 @@ function App() {
           <div className="game-layout">
             <div className="board-container">
               <Board
+                key={game.fen()}
                 board={board}
                 selectedSquare={selectedSquare}
                 onSquareClick={isGameOver ? null : handleSquareClick}
@@ -475,7 +591,6 @@ function App() {
             {/* --- TRAINING MODE HUD --- */}
             {view === 'training' && (
               <div className="side-hud training-hud">
-                <h3>AI Assistant</h3>
                 <p>Playing as: <strong>White</strong></p>
 
                 <button
@@ -483,7 +598,7 @@ function App() {
                   onClick={handleGetHint}
                   disabled={turn !== 'white' || loadingHint}
                 >
-                  {loadingHint ? 'Analyzing...' : '💡 Suggest Best Move'}
+                  {loadingHint ? 'Analyzing...' : 'Best Move?'}
                 </button>
 
                 {/* --- ADD CAPTURED PIECES HERE --- */}
@@ -546,7 +661,7 @@ function App() {
                 </div>
 
                 {/* This button uses your local logic for valid moves */}
-                <button className="highlight-btn" onClick={calculateHighlights}>🔍 Highlight Moves</button>
+                <button className="highlight-btn" onClick={handleHighlightClick}>Ai Suggest?</button>
               </div>
             )}
           </div>

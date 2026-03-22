@@ -1,5 +1,7 @@
 const express = require('express')
 const cors = require('cors')
+const app = express();
+
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
@@ -7,7 +9,6 @@ require('dotenv').config()
 
 const chessAI = require('./chessAI')
 
-const app = express()
 const PORT = process.env.PORT || 3001
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_me'
 
@@ -16,12 +17,24 @@ const frontendUrl = isDev
   ? (process.env.FRONTEND_URL_DEV || 'http://localhost:5173')
   : process.env.FRONTEND_URL_PROD
 
-const allowedOrigins = isDev
-  ? ['http://localhost:3000', 'http://localhost:5173', process.env.FRONTEND_URL_DEV].filter(Boolean)
-  : [process.env.FRONTEND_URL_PROD].filter(Boolean)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://your-production-frontend.vercel.app', // Add your actual prod URL here
+].filter(Boolean);
 
-app.use(cors({ origin: allowedOrigins }))
-app.use(express.json())
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(new Error('CORS Policy: Origin not allowed'), false);
+    }
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 
 const userSchema = new mongoose.Schema(
   {
