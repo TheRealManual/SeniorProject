@@ -1,13 +1,24 @@
-const express = require('express')
-const cors = require('cors')
-const app = express();
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config(); // Load this early
+
+const app = express(); // 1. Initialize app FIRST
+
+// 2. Now apply middleware to the initialized app
+app.use(express.json());
+app.use(cors());
+
+// 3. The rest of your imports
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const chessAI = require('./chessAI');
+
+
+
+
 
 const mongoose = require('mongoose')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
 require('dotenv').config()
-
-const chessAI = require('./chessAI')
 
 const PORT = process.env.PORT || 3001
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_me'
@@ -179,6 +190,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = signToken(user)
     return res.json({ user: sanitizeUser(user), token })
   } catch (error) {
+    console.error("DETAILED LOGIN CRASH:", error);
     return res.status(500).json({ error: 'Failed to sign in' })
   }
 })
