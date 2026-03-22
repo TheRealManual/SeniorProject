@@ -1,10 +1,4 @@
-// This check works in both the browser (Vite) and the terminal (Node.js)
-const CHESS_AI_API_URL =
-  (typeof process !== 'undefined' && process.env && process.env.VITE_CHESS_AI_API_URL)
-    ? process.env.VITE_CHESS_AI_API_URL
-    : (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CHESS_AI_API_URL)
-      ? import.meta.env.VITE_CHESS_AI_API_URL
-      : 'http://localhost:3001';
+const fetch = require('node-fetch')
 
 console.log("Using Chess AI URL:", CHESS_AI_API_URL);
 

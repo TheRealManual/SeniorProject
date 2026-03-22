@@ -20,271 +20,26 @@ const getUnicodePiece = (type) => {
 };
 
 function App() {
-  // --- 1. STATES ---
-  const [view, setView] = useState('home');
+    // 1. ALL STATES AT THE TOP
+    const [view, setView] = useState('home');
+    const [board, setBoard] = useState(initialBoard);
+    const [selectedSquare, setSelectedSquare] = useState(null);
+    const [turn, setTurn] = useState('white');
+    const [errorPopup, setErrorPopup] = useState({ message: '', visible: false });
+    const [backendStatus, setBackendStatus] = useState('loading');
+    const [connectionTest, setConnectionTest] = useState({ status: '', loading: false });
+    const [chessTest, setChessTest] = useState({ result: null, loading: false, error: '' });
 
-  const [game] = useState(new Chess());
-  const [board, setBoard] = useState(game.board()); // Use the same 'game' instance
-  const [selectedSquare, setSelectedSquare] = useState(null);
-  const [turn, setTurn] = useState('white');
-  const [errorPopup, setErrorPopup] = useState({ message: '', visible: false });
-  const [backendStatus, setBackendStatus] = useState('loading');
-  const [connectionTest, setConnectionTest] = useState({ status: '', loading: false });
-  const [chessTest, setChessTest] = useState({ result: null, loading: false, error: '' });
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [score, setScore] = useState(0);
-  const [isGameOver, setIsGameOver] = useState(false);
-  const [capturedByWhite, setCapturedByWhite] = useState([]);
-  const [capturedByBlack, setCapturedByBlack] = useState([]);
-  const [highlightedSquares, setHighlightedSquares] = useState([]);
-  // Add these to your state declarations
-  const [loadingHint, setLoadingHint] = useState(false);
-  const [currentEval, setCurrentEval] = useState('0.0');
-  const [isAiThinking, setIsAiThinking] = useState(false); // Useful for "Training" mode AI turns
-  const [difficulty, setDifficulty] = useState('medium'); // Default to medium
-  // Inside App.jsx, near line 20-30
-  const [gameMessage, setGameMessage] = useState("White's Turn"); // <-- Add this here
-  // AUTH STATES
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authChecking, setAuthChecking] = useState(true);
-  const [authMode, setAuthMode] = useState('signin');
-  const [authError, setAuthError] = useState('');
-  const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' });
+    const apiUrl = import.meta.env.MODE === 'development'
+        ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
+        : import.meta.env.VITE_API_URL_PROD;
 
-  const apiUrl = import.meta.env.MODE === 'development'
-    ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
-    : import.meta.env.VITE_API_URL_PROD;
-
-  // Assuming Chess AI might be on a different port or the same
-  const chessAPIUrl = apiUrl;
-
-  // --- 2. HELPERS & DIAGNOSTICS ---
-  const triggerError = (msg) => {
-    setErrorPopup({ message: msg, visible: true });
-    setTimeout(() => setErrorPopup({ message: '', visible: false }), 2000);
-  };
-
-  const extractMoveFromAI = (data) => {
-    if (data.moves && data.moves.length > 0) return data.moves[0].move;
-    return data.move || data.best_move || null;
-  };
-
-  const coordsToAlgebraic = (row, col) => {
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    return letters[col] + (8 - row);
-  };
-
-  const checkConnection = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/api/health`);
-      setBackendStatus(response.ok ? 'connected' : 'error');
-    } catch { setBackendStatus('error'); }
-  };
-
-  const resetMiniGame = () => {
-    game.reset(); // Library reset
-    setBoard([...game.board().map(row => [...row])])
-    setTurn('white');
-    setSelectedSquare(null);
-    setHighlightedSquares([]);
-    setTimeLeft(60);
-    setScore(0);
-    setIsGameOver(false);
-    setCapturedByWhite([]);
-    setCapturedByBlack([]);
-    setGameMessage("White's Turn");
-
-    const playerName = user?.username || user?.email || "White";
-    setGameMessage(`${playerName}'s Turn`);
-  };
-
-  // --- 3. AUTH LOGIC ---
-  const clearAuth = () => {
-    localStorage.removeItem('auth_token');
-    setUser(null);
-    setToken('');
-    setView('home');
-  };
-
-  const verifySession = async () => {
-    const savedToken = localStorage.getItem('auth_token');
-    if (!savedToken) { setAuthChecking(false); return; }
-    try {
-      const res = await fetch(`${apiUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${savedToken}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.user) {
-        setToken(savedToken);
-        setUser(data.user);
-      } else { clearAuth(); }
-    } catch { clearAuth(); }
-    finally { setAuthChecking(false); }
-  };
-
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError('');
-    try {
-      const endpoint = authMode === 'signup' ? '/api/auth/register' : '/api/auth/login';
-      const res = await fetch(`${apiUrl}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(authForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        localStorage.setItem('auth_token', data.token);
-        setToken(data.token);
-        setUser(data.user);
-      } else { setAuthError(data.error || "Authentication failed"); }
-    } catch { setAuthError("Server unreachable"); }
-    finally { setAuthLoading(false); }
-  };
-
-  const testChessAI = async () => {
-    setChessTest({ result: null, loading: true, error: '' });
-    try {
-      const healthRes = await fetch(`${chessAPIUrl}/api/chess/health`);
-      const health = await healthRes.json();
-      if (!healthRes.ok || health.error) {
-        setChessTest({ result: null, loading: false, error: health.error || 'Chess AI health check failed' });
-        return;
-      }
-      const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-      const moveRes = await fetch(`${chessAPIUrl}/api/chess/move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
-      });
-      const moveData = await moveRes.json();
-      if (!moveRes.ok) {
-        setChessTest({ result: null, loading: false, error: moveData.error || 'Failed to get move' });
-        return;
-      }
-      setChessTest({ result: moveData, loading: false, error: '' });
-    } catch {
-      setChessTest({ result: null, loading: false, error: 'Could not connect to Chess AI' });
-    }
-  };
-
-  const calculateHighlights = (move) => {
-    // 1. Guard Clause: If move is null/undefined, return empty array
-    if (!move) return [];
-
-    let fromStr, toStr;
-
-    // 2. Handle Object Format (e.g., { from: 'e2', to: 'e4' })
-    if (typeof move === 'object' && move.from && move.to) {
-      fromStr = move.from;
-      toStr = move.to;
-    }
-    // 3. Handle String Format (e.g., "e2e4")
-    else if (typeof move === 'string' && move.length >= 4) {
-      fromStr = move.substring(0, 2);
-      toStr = move.substring(2, 4);
-    }
-    else {
-      return []; // Fallback for unexpected data
-    }
-
-    // Convert "e2" -> {row: 6, col: 4}
-    const fromCoords = algebraicToCoords(fromStr);
-    const toCoords = algebraicToCoords(toStr);
-
-    return [fromCoords, toCoords];
-  };
-
-  const handleHighlightClick = async () => {
-    console.log("Fetching hint from AI...");
-    try {
-      const currentFen = game.fen();
-      const data = await analyze(currentFen);
-      console.log("FULL AI DATA:", data);
-
-      // 1. Check if the 'moves' array exists and has at least one item
-      let moveToShow;
-      // Change this line in handleHighlightClick:
-      if (data.moves && data.moves.length > 0) {
-        // We need data.moves[0].move to get 'd2d4'
-        moveToShow = data.moves[0].move;
-        console.log("Extracted String for Highlight:", moveToShow);
-      }
-
-      if (moveToShow) {
-        // 2. Calculate the coordinates and update state
-        const highlights = calculateHighlights(moveToShow);
-        setHighlightedSquares(highlights);
-      } else {
-        console.warn("AI returned an empty moves array.");
-      }
-    } catch (error) {
-      console.error("Failed to get highlights:", error);
-    }
-  };
-
-  // You will also need the inverse of your previous helper:
-  const algebraicToCoords = (algebraic) => {
-    if (!algebraic || algebraic.length < 2) return { row: 0, col: 0 };
-
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const col = letters.indexOf(algebraic[0]);
-    const row = 8 - parseInt(algebraic[1]);
-
-    return { row, col };
-  };
-
-  const parseAlgebraic = (moveStr) => {
-    // 1. Safety Check: If it's an object with a move property, extract the string
-    const str = typeof moveStr === 'object' ? moveStr.move : moveStr;
-
-    if (!str || typeof str !== 'string' || str.length < 4) {
-      console.error("Invalid move string received:", str);
-      return null;
-    }
-
-    try {
-      const colToNum = (char) => char.toLowerCase().charCodeAt(0) - 97; // 'a' is 97
-      const rowToNum = (char) => 8 - parseInt(char);
-
-      const from = { row: rowToNum(str[1]), col: colToNum(str[0]) };
-      const to = { row: rowToNum(str[3]), col: colToNum(str[2]) };
-
-      // final check for NaN
-      if (isNaN(from.row) || isNaN(from.col)) return null;
-
-      return { from, to };
-    } catch (e) {
-      console.error("Parsing error:", e);
-      return null;
-    }
-  };
-
-  // --- 4. EFFECTS ---
-  useEffect(() => { verifySession(); }, []);
-  useEffect(() => {
-    checkConnection();
-    const interval = setInterval(checkConnection, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // --- INACTIVITY TIMEOUT LOGIC ---
-  useEffect(() => {
-    if (!user) return;
-
-    let timeoutId;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-
-      timeoutId = setTimeout(() => {
-        console.log("Inactivity limit reached. Logging out...");
-        triggerError("Logged out due to inactivity"); // Optional: let the user know why
-        clearAuth();
-      }, 10 * 60 * 1000);
+    // Chess AI service URL
+    const chessAPIUrl = import.meta.env.VITE_CHESS_AI_API_URL;
+    // 2. HELPER FUNCTIONS
+    const triggerError = (msg) => {
+        setErrorPopup({ message: msg, visible: true });
+        setTimeout(() => setErrorPopup({ message: '', visible: false }), 2000);
     };
 
     const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
@@ -327,31 +82,25 @@ function App() {
         return;
       }
 
-      try {
-        setHighlightedSquares([]);
-        console.log("AI is thinking...");
-        const currentFen = game.fen();
-        const data = await getMove(currentFen, difficulty || 'medium');
-        if (!data) throw new Error("No data received from AI");
-        console.log("AI Move Data received in App.jsx:", data);
-
-        // --- FIX IS HERE ---
-        // We check for 'data.move' (flat object) OR 'data.moves' (array)
-        const bestMove = data.move || (data.moves && data.moves[0]?.move);
-
-        if (bestMove) {
-          console.log("Applying move to board:", bestMove);
-
-          const moveResult = game.move(bestMove);
-
-          if (moveResult) {
-            // --- CAPTURE LOGIC FOR AI ---
-            if (moveResult.captured) {
-              if (moveResult.color === 'b') {
-                setCapturedByBlack(prev => [...prev, moveResult.captured]);
-              } else {
-                setCapturedByWhite(prev => [...prev, moveResult.captured]);
-              }
+    const testChessAI = async () => {
+        setChessTest({ result: null, loading: true, error: '' });
+        try {
+            const healthRes = await fetch(`${chessAPIUrl}/api/health`);
+            const health = await healthRes.json();
+            if (!healthRes.ok || health.error) {
+                setChessTest({ result: null, loading: false, error: health.error || 'Chess AI health check failed' });
+                return;
+            }
+            const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+            const moveRes = await fetch(`${chessAPIUrl}/api/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
+            });
+            const moveData = await moveRes.json();
+            if (!moveRes.ok) {
+                setChessTest({ result: null, loading: false, error: moveData.error || 'Failed to get move' });
+                return;
             }
 
             setBoard([...game.board().map(row => [...row])]);
