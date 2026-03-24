@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Board from './components/Board'
-import { getMove, analyze, evaluate } from '../../backend/chessAI';
+import { getMove, analyze, evaluate } from './chessAI';
 import {Chess } from 'chess.js';
 import './App.css'
 
@@ -108,6 +108,30 @@ function App() {
     setView('home');
   };
 
+  const consumeAuthCallback = () => {
+    const params = new URLSearchParams(window.location.search);
+    const callbackToken = params.get('auth_token');
+    const callbackError = params.get('auth_error');
+
+    if (callbackToken) {
+      localStorage.setItem('auth_token', callbackToken);
+      setToken(callbackToken);
+      setAuthError('');
+    }
+
+    if (callbackError) {
+      localStorage.removeItem('auth_token');
+      setToken('');
+      setUser(null);
+      setAuthError(callbackError);
+      setView('home');
+    }
+
+    if (callbackToken || callbackError) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  };
+
   const verifySession = async () => {
     const savedToken = localStorage.getItem('auth_token');
     if (!savedToken) { setAuthChecking(false); return; }
@@ -119,6 +143,7 @@ function App() {
       if (res.ok && data.user) {
         setToken(savedToken);
         setUser(data.user);
+        setAuthError('');
       } else { clearAuth(); }
     } catch { clearAuth(); }
     finally { setAuthChecking(false); }
@@ -264,7 +289,10 @@ function App() {
   };
 
   // --- 4. EFFECTS ---
-  useEffect(() => { verifySession(); }, []);
+  useEffect(() => {
+    consumeAuthCallback();
+    verifySession();
+  }, []);
   useEffect(() => {
     checkConnection();
     const interval = setInterval(checkConnection, 30000);
