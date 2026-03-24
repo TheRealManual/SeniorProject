@@ -103,18 +103,25 @@ button:hover {
 .game-view {
   width: 100vw;
   height: 100vh;
+  /* Changed from min-height to height */
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  /* Centers the board vertically */
+  justify-content: flex-start;
   align-items: center;
-  gap: 20px;
-  /* Space between header and board */
+  gap: 10px;
+  /* Reduced gap */
+  padding: 10px 0;
+  /* Reduced padding */
+  overflow: hidden;
+  /* This removes the scrollbar */
 }
 
 .game-header {
-  width: 80vmin;
-  /* Matches the board width for alignment */
+  width: 90%;
+  /* Let it take more width */
+  max-width: 1000px;
+  height: 60px;
+  /* Fixed height for header */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -128,13 +135,7 @@ button:hover {
   font-size: 1.1rem;
 }
 
-/* Adjusting the Board for the screen size */
-.chess-board {
-  /* This ensures the board scales with the window height */
-  max-height: 80vh;
-  max-width: 80vh;
-  aspect-ratio: 1 / 1;
-}
+
 
 .error-popup {
   position: fixed;
@@ -224,4 +225,693 @@ button:hover {
   100% {
     opacity: 1;
   }
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+.menu-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.menu-grid button:hover {
+  border-color: #4CAF50;
+  transform: translateY(-5px);
+  background: #333;
+}
+
+.menu-grid .icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.menu-grid small {
+  display: block;
+  margin-top: 8px;
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+.lobby-view {
+  text-align: center;
+  padding: 20px;
+  animation: fadeIn 0.4s ease-in;
+}
+
+.menu-divider {
+  width: 80%;
+  border: 0;
+  border-top: 1px solid #444;
+  margin: 20px auto;
+}
+
+.back-btn {
+  margin-top: 20px;
+  background-color: transparent;
+  color: #888;
+  border: 1px solid #444;
+}
+
+.back-btn:hover {
+  color: white;
+  border-color: white;
+}
+
+.menu-divider {
+  width: 60%;
+  border: 0;
+  border-top: 1px solid #444;
+  margin: 20px auto;
+}
+
+.timed-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: #1a1a1a;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #333;
+}
+
+.timer-container {
+  width: 60%;
+  height: 25px;
+  background: #333;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.timer-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 1s linear, background 0.3s ease;
+}
+
+.timer-bar.urgent {
+  background: linear-gradient(90deg, #f44336, #ff5722);
+  animation: pulse 0.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.stat-card {
+  text-align: center;
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 1.5rem;
+  color: #ffeb3b;
+}
+
+/* Layout Container */
+.game-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 15px;
+  width: 100%;
+  /* Takes full height minus the header (60px) and some padding */
+  height: calc(100vh - 100px);
+  max-height: 700px;
+  padding: 0 10px 10px 10px;
+  box-sizing: border-box;
+}
+
+/* The Sidebar */
+.side-hud {
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+  border: 2px solid #333;
+  border-radius: 12px;
+  padding: 12px;
+  width: 220px;
+  /* Increased slightly for longer names */
+  gap: 10px;
+  height: 100%;
+  /* Changed from 90% to fill the layout */
+  overflow: hidden;
+  /* Prevent the whole sidebar from scrolling */
+  box-sizing: border-box;
+}
+
+/* Ensure names don't overflow the container */
+.side-hud p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 5px 0;
+}
+
+.stat-box,
+.timer-container,
+.highlight-btn {
+  flex-shrink: 0;
+}
+
+.score-val {
+  font-size: 1.5rem;
+  color: #4CAF50;
+  font-weight: bold;
+  display: block;
+}
+
+.time-val {
+  font-size: 1.6rem;
+  font-family: monospace;
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Vertical Progress Bar */
+.progress-container-vertical {
+  width: 20px;
+  height: 100px;
+  background: #333;
+  border-radius: 10px;
+  margin: 5px auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill-vertical {
+  width: 100%;
+  background: #4CAF50;
+  position: absolute;
+  bottom: 0;
+  /* Shrinks from top to bottom */
+  transition: height 1s linear;
+}
+
+.restart-btn-side {
+  margin-top: 10px;
+  background: #333;
+  border: 1px solid #555;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.restart-btn-side:hover {
+  background: #444;
+  border-color: #4CAF50;
+}
+
+/* Responsive adjustment: if the screen is too small, stack them again */
+@media (max-width: 800px) {
+  .game-layout {
+    flex-direction: column;
+    /* Stack HUD under the board */
+    align-items: center;
+  }
+
+  .board-container {
+    width: 95vmin;
+    /* Use more of the screen on mobile */
+    height: 95vmin;
+  }
+}
+
+.captured-box {
+  background: #252525;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  min-height: 60px;
+}
+
+.captured-box small {
+  display: block;
+  font-size: 0.65rem;
+  color: #888;
+  margin-bottom: 5px;
+  letter-spacing: 1px;
+}
+
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.captured-section {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* Keeps captured pieces at the bottom */
+  gap: 8px;
+  min-height: 0;
+  /* Important for flex-grow to work properly */
+}
+
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 30px;
+  font-size: 1.5rem;
+  color: #ffd700;
+  /* Matching that gold/yellow look in your screenshot */
+}
+
+.captured-icon {
+  font-size: 1.2rem;
+  color: #fff;
+  /* Optional: make captured white pieces slightly transparent 
+       if they are on a dark background */
+}
+
+.captured-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: default;
+  user-select: none;
+  transition: transform 0.2s ease;
+}
+
+/* Optional: Make them pop a bit when they appear */
+.captured-icon:hover {
+  transform: scale(1.2);
+}
+
+/* Style for White pieces to ensure they are visible on dark background */
+/* Assuming 'P', 'R', etc are White and 'p', 'r' are Black */
+.piece-list span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.captured-icon {
+  font-size: 24px;
+  /* Makes the captured list icons clear */
+  margin: 2px;
+  color: #bdba14;
+  /* Dark grey looks better than pure black */
+}
+
+/* 4. The Pieces - Scale with the square */
+.piece-unicode {
+  font-size: 7vmin;
+  /* Pieces grow/shrink with the board */
+  /* If pieces get too big/small, use a cap: */
+  font-size: clamp(24px, 7vmin, 50px);
+}
+
+.highlight-btn {
+  background: #4a90e2;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  width: 100%;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s;
+  /* Add the animation here */
+  animation: button-pulse 2s infinite;
+}
+
+.highlight-btn:hover {
+  background: #357abd;
+  animation: none;
+  /* Stop pulsing when hovering */
+  transform: scale(1.02);
+}
+
+@keyframes button-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
+  }
+}
+
+@keyframes pulse-glow {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 0.3;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+}
+
+/* 3. The Squares */
+.square {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Updated Colors to match your tan/brown theme */
+.light-square {
+  background-color: #f0d9b5;
+}
+
+.dark-square {
+  background-color: #b58863;
+}
+
+/* Highlight for selected piece */
+.square.selected {
+  background-color: rgba(255, 255, 0, 0.5) !important;
+}
+
+
+
+.piece-image {
+  width: 85%;
+  height: 85%;
+  z-index: 5;
+  position: relative;
+  pointer-events: none;
+  /* Add this */
+}
+
+/* 1. The Container - No more fixed 660px */
+.board-container {
+  position: relative;
+  height: 100%;
+  /* Let the game-layout height (700px max) dictate the size */
+  aspect-ratio: 1 / 1;
+  /* This forces it to remain a square */
+  max-width: 550px;
+  max-height: 550px;
+  background-color: #2c3e50;
+  border: 4px solid #2c3e50;
+  /* Changed from 1vmin to pixels for stability */
+  border-radius: 8px;
+  margin: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex-shrink: 1;
+}
+
+/* 2. The Board - Use Grid with 'fr' units */
+.chess-board {
+  display: grid;
+  /* 8 equal columns that fill the container */
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  animation: fadeOut 0.5s ease-out;
+}
+
+.big-x {
+  font-size: 30vmin;
+  line-height: 1;
+  margin: 0;
+  filter: drop-shadow(0 0 30px rgba(255, 0, 0, 0.8));
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  user-select: none;
+}
+
+.game-over-text h2 {
+  font-size: 3rem;
+  margin: 10px 0;
+  color: #ff4444;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.game-over-text p {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.game-over-text .primary-btn {
+  background-color: #4CAF50;
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.retry-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-left: 5px;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.auth-shell {
+  padding: 1rem;
+}
+
+.auth-card {
+  width: min(90vw, 420px);
+  padding: 2rem;
+  border-radius: 14px;
+  background: #1a1a1a;
+  border: 1px solid #2f2f2f;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-card h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--accent-color);
+}
+
+.auth-subtitle {
+  margin: 0;
+  color: #bfbfbf;
+  font-size: 0.95rem;
+}
+
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.auth-switch button {
+  background: #2a2a2a;
+  border: 1px solid #404040;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.auth-switch button.active {
+  background: var(--accent-color);
+  color: #09110a;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.auth-divider {
+  color: #949494;
+  font-size: 0.9rem;
+}
+
+.discord-btn {
+  background: #5865f2;
+  color: #fff;
+}
+
+.discord-btn:hover {
+  background: #6a76f5;
+}
+
+@media (max-width: 640px) {
+  .home-page h1 {
+    font-size: 2.2rem;
+  }
+
+  .auth-card {
+    padding: 1.2rem;
+  }
+}
+
+/* 1. The Square Background Glow */
+.square.highlighted {
+  position: relative;
+  /* !important ensures the tan/brown background doesn't hide this */
+  background-color: rgba(46, 204, 113, 0.5) !important;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+/* 2. The Animated Green Dot */
+.square.highlighted::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  /* Slightly bigger to be seen under pieces */
+  height: 26px;
+  background: #2ecc71 !important;
+  /* Vivid green */
+  border-radius: 50%;
+  box-shadow: 0 0 20px 8px rgba(46, 204, 113, 0.7);
+  animation: hint-pulse 1.2s infinite ease-in-out;
+  pointer-events: none;
+  /* z-index 10 puts it ON TOP of the piece images */
+  z-index: 10;
+}
+
+@keyframes hint-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.7;
+  }
+}
+
+.message-container {
+  height: 40px;
+  /* Keeps layout stable even when message is empty */
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.status-toast {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+}
+
+.white-turn {
+  border-left: 5px solid #fff;
+}
+
+.black-turn {
+  border-left: 5px solid #555;
+}
+
+.training-hud .piece-list {
+  max-width: 250px;
+  /* Limits width so it doesn't push the HUD too wide */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.training-hud .captured-icon {
+  font-size: 1.2rem;
+  /* Slightly smaller for the side HUD */
+  margin-right: -5px;
+  /* "Stacks" them slightly like real chess broadcasts */
 }

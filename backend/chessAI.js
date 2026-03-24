@@ -1,62 +1,79 @@
-const fetch = require('node-fetch')
+// This check works in both the browser (Vite) and the terminal (Node.js)
+const CHESS_AI_API_URL =
+  (typeof process !== 'undefined' && process.env && process.env.VITE_CHESS_AI_API_URL)
+    ? process.env.VITE_CHESS_AI_API_URL
+    : (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_CHESS_AI_API_URL)
+      ? import.meta.env.VITE_CHESS_AI_API_URL
+      : 'http://localhost:3001';
 
-const CHESS_AI_API_URL = process.env.CHESS_AI_API_URL
+console.log("Using Chess AI URL:", CHESS_AI_API_URL);
 
-async function healthCheck() {
-  if (!CHESS_AI_API_URL) {
-    return { status: 'error', message: 'CHESS_AI_API_URL not configured' }
+// HELPER: Ensures we don't have double slashes if the URL ends in /
+const getEndpoint = (path) => `${CHESS_AI_API_URL.replace(/\/$/, '')}${path}`;
+
+export async function healthCheck() {
+  try {
+    const res = await fetch(getEndpoint('/api/health'));
+    if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+    return await res.json();
+  } catch (error) {
+    return { status: 'error', message: error.message };
   }
-  const res = await fetch(`${CHESS_AI_API_URL}/api/health`)
-  if (!res.ok) throw new Error(`Health check failed: ${res.status}`)
-  return res.json()
 }
 
-async function getMove(fen, difficulty = 'medium') {
-  if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
+export const getMove = async (fen, difficulty) => {
+  console.log("--- getMove Internal Start ---");
+  try {
+    const response = await fetch(getEndpoint('/api/move'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fen: fen,
+        difficulty: difficulty || 'medium'
+      })
+    });
 
-  const res = await fetch(`${CHESS_AI_API_URL}/api/move`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fen, difficulty }),
-  })
+    console.log("--- getMove Response Received ---", response.status);
 
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`/api/move failed (${res.status}): ${body}`)
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Move API Error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("--- getMove Data Parsed ---", data);
+    return data;
+  } catch (error) {
+    console.error("getMove Catch Block:", error);
+    throw error;
   }
-  return res.json()
-}
+};
 
-async function evaluate(fen) {
-  if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
-
-  const res = await fetch(`${CHESS_AI_API_URL}/api/evaluate`, {
+export async function evaluate(fen) {
+  const res = await fetch(getEndpoint('/api/evaluate'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fen }),
-  })
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`/api/evaluate failed (${res.status}): ${body}`)
+    const body = await res.text();
+    throw new Error(`/api/evaluate failed (${res.status}): ${body}`);
   }
-  return res.json()
+
+  return res.json();
 }
 
-async function analyze(fen, numSims = 400) {
-  if (!CHESS_AI_API_URL) throw new Error('CHESS_AI_API_URL not configured')
-
-  const res = await fetch(`${CHESS_AI_API_URL}/api/analyze`, {
+export async function analyze(fen, numSims = 400) {
+  const res = await fetch(getEndpoint('/api/analyze'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fen, num_sims: numSims }),
-  })
+    body: JSON.stringify({ fen: fen, num_sims: numSims })
+  });
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`/api/analyze failed (${res.status}): ${body}`)
+    const body = await res.text();
+    throw new Error(`/api/analyze failed (${res.status}): ${body}`);
   }
-  return res.json()
+  return res.json();
 }
-
-module.exports = { healthCheck, getMove, evaluate, analyze }

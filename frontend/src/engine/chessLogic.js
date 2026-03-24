@@ -11,12 +11,17 @@ export const initialBoard = [
 
 export const isLightSquare = (row, col) => (row + col) % 2 === 0;
 
-export const getUnicodePiece = (piece) => {
+export const getUnicodePiece = (type) => {
+    if (!type) return '';
     const pieces = {
-        'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
-        'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙'
+        p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚'
     };
-    return pieces[piece] || '';
+    return pieces[type.toLowerCase()] || '';
+};
+
+const coordsToAlgebraic = (row, col) => {
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    return letters[col] + (8 - row);
 };
 
 export const isPathClear = (startRow, startCol, endRow, endCol, board) => {
@@ -43,8 +48,11 @@ export const isPathClear = (startRow, startCol, endRow, endCol, board) => {
 export const isValidMove = (startRow, startCol, endRow, endCol, piece, board) => {
     const isWhite = piece === piece.toUpperCase();
     const rowDiff = endRow - startRow;
-    const colDiff = Math.abs(endCol - startCol);
+    const colDiff = endCol - startCol;
+    const absRowDiff = Math.abs(rowDiff);
+    const absColDiff = Math.abs(colDiff);
     const targetPiece = board[endRow][endCol];
+    const type = piece.toLowerCase();
 
     // PAWN LOGIC
     if (piece.toLowerCase() === 'p') {
@@ -74,6 +82,101 @@ export const isValidMove = (startRow, startCol, endRow, endCol, piece, board) =>
         return false; // If none of the above, it's an illegal pawn move
     }
 
+    if (type === 'p') {
+        const direction = isWhite ? -1 : 1;
+        const startRowConst = isWhite ? 6 : 1;
+        if (Math.abs(colDiff) === 0 && rowDiff === direction && !targetPiece) return true;
+        if (Math.abs(colDiff) === 0 && startRow === startRowConst && rowDiff === 2 * direction && !targetPiece) {
+            if (board[startRow + direction][startCol] === null) return true;
+        }
+        if (Math.abs(colDiff) === 1 && rowDiff === direction && targetPiece) {
+            return isWhite !== (targetPiece === targetPiece.toUpperCase());
+        }
+        return false;
+    }
+
+    // 2. ROOK: Straight lines only (Horizontal or Vertical)
+    if (type === 'r') {
+        return (absRowDiff === 0 || absColDiff === 0);
+    }
+
+    // 3. BISHOP: Diagonals only (Row change must equal Col change)
+    if (type === 'b') {
+        return (absRowDiff === absColDiff);
+    }
+
+    // 4. QUEEN: Straight or Diagonal
+    if (type === 'q') {
+        return (absRowDiff === 0 || absColDiff === 0 || absRowDiff === absColDiff);
+    }
+
+    // 5. KNIGHT: L-shape (2x1 or 1x2) - No path check needed for Knights!
+    if (type === 'n') {
+        return (absRowDiff === 2 && absColDiff === 1) || (absRowDiff === 1 && absColDiff === 2);
+    }
+
+    // 6. KING: One square in any direction
+    if (type === 'k') {
+        return (absRowDiff <= 1 && absColDiff <= 1);
+    }
+
     // For now, we will allow all other pieces to move normally until we add their rules
-    return true;
+    return false;
+};
+
+/**
+ * Converts a 2D board array to a FEN string.
+ * @param {Array} board - Your current 8x8 board state
+ * @param {string} turn - 'white' or 'black'
+ */
+export const boardToFen = (board, turn) => {
+    let fen = "";
+
+    for (let r = 0; r < 8; r++) {
+        let emptySquares = 0;
+        for (let c = 0; c < 8; c++) {
+            const piece = board[r][c];
+            if (piece === null) {
+                emptySquares++;
+            } else {
+                if (emptySquares > 0) {
+                    fen += emptySquares;
+                    emptySquares = 0;
+                }
+                fen += piece;
+            }
+        }
+        if (emptySquares > 0) {
+            fen += emptySquares;
+        }
+        if (r < 7) fen += "/";
+    }
+
+    // Add turn: 'w' for white, 'b' for black
+    fen += ` ${turn === 'white' ? 'w' : 'b'}`;
+
+    // Simplified: No castling rights or en passant for now
+    fen += " - - 0 1";
+
+    return fen;
+};
+
+/**
+ * Converts algebraic move (e.g., "e2e4") to coordinates
+ * @param {string} moveStr - e.g., "e2e4"
+ * @returns {object} { from: {r, c}, to: {r, c} }
+ */
+export const parseAlgebraic = (moveStr) => {
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+    const fromCol = files.indexOf(moveStr[0]);
+    const fromRow = 8 - parseInt(moveStr[1]);
+
+    const toCol = files.indexOf(moveStr[2]);
+    const toRow = 8 - parseInt(moveStr[3]);
+
+    return {
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol }
+    };
 };
