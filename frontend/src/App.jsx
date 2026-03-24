@@ -313,7 +313,6 @@ function App() {
         triggerError("Logged out due to inactivity"); // Optional: let the user know why
         clearAuth();
       }, 10 * 60 * 1000);
->>>>>>> bd50177895763feb3999ca7096019798358881f6
     };
 
     const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
@@ -429,37 +428,9 @@ function App() {
       return;
     }
 
-<<<<<<< HEAD
-    const testChessAI = async () => {
-        setChessTest({ result: null, loading: true, error: '' });
-        try {
-            const healthRes = await fetch(`${chessAPIUrl}/api/health`);
-            const health = await healthRes.json();
-            if (!healthRes.ok || health.error) {
-                setChessTest({ result: null, loading: false, error: health.error || 'Chess AI health check failed' });
-                return;
-            }
-            const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            const moveRes = await fetch(`${chessAPIUrl}/api/move`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fen: startFen, difficulty: 'easy' }),
-            });
-            const moveData = await moveRes.json();
-            if (!moveRes.ok) {
-                setChessTest({ result: null, loading: false, error: moveData.error || 'Failed to get move' });
-                return;
-            }
-            setChessTest({ result: moveData, loading: false, error: '' });
-        } catch (error) {
-            setChessTest({ result: null, loading: false, error: 'Could not connect to Chess AI' });
-        }
-    };
-=======
     // --- 2. MOVE EXECUTION LOGIC ---
     const from = coordsToAlgebraic(selectedSquare.row, selectedSquare.col);
     const to = coordsToAlgebraic(row, col);
->>>>>>> bd50177895763feb3999ca7096019798358881f6
 
     try {
       const move = game.move({ from, to, promotion: 'q' });
