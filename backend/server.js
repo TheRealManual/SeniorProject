@@ -6,7 +6,6 @@ const app = express(); // 1. Initialize app FIRST
 
 // 2. Now apply middleware to the initialized app
 app.use(express.json());
-app.use(cors());
 
 // 3. The rest of your imports
 const bcrypt = require('bcrypt');
@@ -24,15 +23,93 @@ const PORT = process.env.PORT || 3001
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_me'
 
 const isDev = process.env.NODE_ENV === 'development'
-const frontendUrl = isDev
-  ? (process.env.FRONTEND_URL_DEV || 'http://localhost:5173')
-  : process.env.FRONTEND_URL_PROD
+const normalizeOrigin = (value) => {
+  if (!value) return null
 
-const allowedOrigins = [
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+const configuredOrigins = [
+  process.env.FRONTEND_URL_DEV,
+  process.env.FRONTEND_URL_PROD,
+  ...(process.env.FRONTEND_URLS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+]
+  .map(normalizeOrigin)
+  .filter(Boolean)
+
+const defaultFrontendOrigin =
+  (isDev ? normalizeOrigin(process.env.FRONTEND_URL_DEV) : null) ||
+  normalizeOrigin(process.env.FRONTEND_URL_PROD) ||
+  normalizeOrigin(process.env.FRONTEND_URL_DEV) ||
+  'http://localhost:5173'
+
+const parseOAuthState = (state) => {
+  if (!state) return null
+
+  try {
+    return JSON.parse(Buffer.from(String(state), 'base64url').toString('utf8'))
+  } catch {
+    return null
+  }
+}
+
+const createOAuthState = (payload) =>
+  Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+
+const getAllowedFrontendOrigin = (value) => {
+  const normalized = normalizeOrigin(value)
+  if (!normalized) return null
+
+  return allowedOrigins.includes(normalized) ? normalized : null
+}
+
+const getFrontendOriginFromRequest = (req) => {
+  const state = parseOAuthState(req.query.state)
+  const candidates = [
+    state?.frontendOrigin,
+    req.query.frontend_origin,
+    req.get('origin'),
+    req.get('referer'),
+    defaultFrontendOrigin,
+  ]
+
+  for (const candidate of candidates) {
+    const allowedOrigin = getAllowedFrontendOrigin(candidate)
+    if (allowedOrigin) return allowedOrigin
+  }
+
+  return defaultFrontendOrigin
+}
+
+const getBackendBaseUrl = (req) => {
+  const configured = process.env.BACKEND_URL
+  if (configured) {
+    return configured.replace(/\/$/, '')
+  }
+
+  const forwardedProto = req.get('x-forwarded-proto')
+  const forwardedHost = req.get('x-forwarded-host')
+  const host = forwardedHost || req.get('host')
+
+  if (host) {
+    return `${forwardedProto || req.protocol || 'http'}://${host}`
+  }
+
+  return `http://localhost:${PORT}`
+}
+
+const allowedOrigins = Array.from(new Set([
   'http://localhost:3000',
   'http://localhost:5173',
-  'https://your-production-frontend.vercel.app', // Add your actual prod URL here
-].filter(Boolean);
+  ...configuredOrigins,
+])).filter(Boolean)
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -208,20 +285,24 @@ app.get('/api/auth/discord', (req, res) => {
     return res.status(500).json({ error: 'Missing DISCORD_CLIENT_ID' })
   }
 
-  const redirectUri = process.env.DISCORD_REDIRECT_URI || `${process.env.BACKEND_URL || `http://localhost:${PORT}`}/api/auth/discord/callback`
+  const redirectUri = process.env.DISCORD_REDIRECT_URI || `${getBackendBaseUrl(req)}/api/auth/discord/callback`
   const discordAuthUrl = new URL('https://discord.com/oauth2/authorize')
+  const frontendOrigin = getFrontendOriginFromRequest(req)
 
   discordAuthUrl.searchParams.set('client_id', process.env.DISCORD_CLIENT_ID)
   discordAuthUrl.searchParams.set('response_type', 'code')
   discordAuthUrl.searchParams.set('redirect_uri', redirectUri)
   discordAuthUrl.searchParams.set('scope', 'identify email')
+  discordAuthUrl.searchParams.set('state', createOAuthState({ frontendOrigin }))
 
   return res.redirect(discordAuthUrl.toString())
 })
 
 app.get('/api/auth/discord/callback', async (req, res) => {
+  const frontendOrigin = getFrontendOriginFromRequest(req)
+
   const redirectWithError = (message, statusCode = 500) => {
-    const target = `${frontendUrl || 'http://localhost:5173'}/?auth_error=${encodeURIComponent(message)}`
+    const target = `${frontendOrigin}/?auth_error=${encodeURIComponent(message)}`
     return res.status(statusCode).redirect(target)
   }
 
@@ -235,7 +316,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
       return redirectWithError('Discord OAuth is not configured on server')
     }
 
-    const redirectUri = process.env.DISCORD_REDIRECT_URI || `${process.env.BACKEND_URL || `http://localhost:${PORT}`}/api/auth/discord/callback`
+    const redirectUri = process.env.DISCORD_REDIRECT_URI || `${getBackendBaseUrl(req)}/api/auth/discord/callback`
     const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -286,7 +367,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     await user.save()
 
     const token = signToken(user)
-    const redirectTarget = `${frontendUrl || 'http://localhost:5173'}/?auth_token=${encodeURIComponent(token)}`
+    const redirectTarget = `${frontendOrigin}/?auth_token=${encodeURIComponent(token)}`
     return res.redirect(redirectTarget)
   } catch (error) {
     return redirectWithError('Discord sign-in failed')

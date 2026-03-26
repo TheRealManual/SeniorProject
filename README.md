@@ -48,3 +48,14 @@ Backend (.env):
 - `PORT` - Server port (3001)
 - `NODE_ENV` - Environment mode (development for local, production for App Runner)
 - `FRONTEND_URL_PROD` - Frontend URL for CORS in production (your Amplify URL)
+- `FRONTEND_URLS` - Optional comma-separated list of allowed frontend origins
+- `BACKEND_URL` - Public backend URL used to build OAuth callbacks when `DISCORD_REDIRECT_URI` is not set
+- `DISCORD_CLIENT_ID` - Discord OAuth application client ID
+- `DISCORD_CLIENT_SECRET` - Discord OAuth application client secret
+- `DISCORD_REDIRECT_URI` - Discord OAuth callback URL, which must match your production backend callback exactly
+
+For production Discord sign-in:
+- Set `FRONTEND_URL_PROD=https://main.d1iqbm60uibqrj.amplifyapp.com`
+- Set `BACKEND_URL` to your App Runner backend URL
+- Set `DISCORD_REDIRECT_URI` to `https://<your-backend-domain>/api/auth/discord/callback`
+- In the Discord developer portal, add that same callback URL under OAuth2 redirects

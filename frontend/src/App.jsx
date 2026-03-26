@@ -108,6 +108,12 @@ function App() {
     setView('home');
   };
 
+  const startDiscordLogin = () => {
+    const discordUrl = new URL(`${apiUrl}/api/auth/discord`);
+    discordUrl.searchParams.set('frontend_origin', window.location.origin);
+    window.location.href = discordUrl.toString();
+  };
+
   const consumeAuthCallback = () => {
     const params = new URLSearchParams(window.location.search);
     const callbackToken = params.get('auth_token');
@@ -520,7 +526,7 @@ function App() {
             <input type="password" placeholder="Password" required onChange={e => setAuthForm({ ...authForm, password: e.target.value })} />
             <button type="submit" disabled={authLoading}>{authLoading ? 'Connecting...' : 'Continue'}</button>
           </form>
-          <button className="discord-btn" onClick={() => window.location.href = `${apiUrl}/api/auth/discord`}>Login with Discord</button>
+          <button className="discord-btn" onClick={startDiscordLogin}>Login with Discord</button>
         </div>
       </div>
     );
