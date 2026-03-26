@@ -1,30 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Board from './components/Board'
-import { getMove, analyze, evaluate } from './chessAI';
-import {Chess } from 'chess.js';
+import { getPieceSrc } from './components/chessPieces'
+import { getMove, analyze, evaluate, analyzePlayerMove, suggestMove, getPieceInfo } from './chessAI';
+import { Chess } from 'chess.js';
 import './App.css'
-
-
-const getUnicodePiece = (type) => {
-  if (!type) return '';
-  // chess.js uses lowercase for piece types (p, n, b, r, q, k)
-  const pieces = {
-    p: '♟',
-    n: '♞',
-    b: '♝',
-    r: '♜',
-    q: '♛',
-    k: '♚'
-  };
-  return pieces[type.toLowerCase()] || '';
-};
 
 function App() {
   // --- 1. STATES ---
   const [view, setView] = useState('home');
 
   const [game] = useState(new Chess());
-  const [board, setBoard] = useState(game.board()); // Use the same 'game' instance
+  const [board, setBoard] = useState(game.board());
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [turn, setTurn] = useState('white');
   const [errorPopup, setErrorPopup] = useState({ message: '', visible: false });
@@ -37,14 +23,26 @@ function App() {
   const [capturedByWhite, setCapturedByWhite] = useState([]);
   const [capturedByBlack, setCapturedByBlack] = useState([]);
   const [highlightedSquares, setHighlightedSquares] = useState([]);
-  // Add these to your state declarations
   const [loadingHint, setLoadingHint] = useState(false);
-  const [currentEval, setCurrentEval] = useState('0.0');
-  const [isAiThinking, setIsAiThinking] = useState(false); // Useful for "Training" mode AI turns
-  const [difficulty, setDifficulty] = useState('medium'); // Default to medium
-  // Inside App.jsx, near line 20-30
-  const [gameMessage, setGameMessage] = useState("White's Turn"); // <-- Add this here
-  // AUTH STATES
+  const [currentEval, setCurrentEval] = useState(0);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [difficulty, setDifficulty] = useState('max');
+  const [gameMessage, setGameMessage] = useState("White's Turn");
+
+  // Training mode states
+  const [feedbackHtml, setFeedbackHtml] = useState(null);
+  const [suggestionHtml, setSuggestionHtml] = useState(null);
+  const [hideSuggestions, setHideSuggestions] = useState(false);
+  const [legalDestinations, setLegalDestinations] = useState([]);
+  const [pieceInfoTooltip, setPieceInfoTooltip] = useState(null);
+  const [evalConfidence, setEvalConfidence] = useState(null);
+  const [evalThinkTime, setEvalThinkTime] = useState(null);
+  const [analyzingMove, setAnalyzingMove] = useState(false);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [tooltipData, setTooltipData] = useState(null); // { name, color, square, rules, moveCount, x, y }
+  const tooltipSquareRef = useRef(null); // track which square tooltip is for
+
+  // Auth states
   const [user, setUser] = useState(null);
   const [token, setToken] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -53,27 +51,46 @@ function App() {
   const [authError, setAuthError] = useState('');
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' });
 
+  const boardRef = useRef(null);
+
   const apiUrl = import.meta.env.MODE === 'development'
     ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
     : import.meta.env.VITE_API_URL_PROD;
 
-  // Assuming Chess AI might be on a different port or the same
   const chessAPIUrl = apiUrl;
 
-  // --- 2. HELPERS & DIAGNOSTICS ---
+  // --- 2. HELPERS ---
   const triggerError = (msg) => {
     setErrorPopup({ message: msg, visible: true });
     setTimeout(() => setErrorPopup({ message: '', visible: false }), 2000);
   };
 
-  const extractMoveFromAI = (data) => {
-    if (data.moves && data.moves.length > 0) return data.moves[0].move;
-    return data.move || data.best_move || null;
-  };
-
   const coordsToAlgebraic = (row, col) => {
     const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     return letters[col] + (8 - row);
+  };
+
+  const algebraicToCoords = (algebraic) => {
+    if (!algebraic || algebraic.length < 2) return { row: 0, col: 0 };
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const col = letters.indexOf(algebraic[0]);
+    const row = 8 - parseInt(algebraic[1]);
+    return { row, col };
+  };
+
+  const calculateHighlights = (move) => {
+    if (!move) return [];
+    let fromStr, toStr;
+    if (typeof move === 'object' && move.from && move.to) {
+      fromStr = move.from;
+      toStr = move.to;
+    } else if (typeof move === 'string' && move.length >= 4) {
+      fromStr = move.substring(0, 2);
+      toStr = move.substring(2, 4);
+    } else {
+      return [];
+    }
+    return [algebraicToCoords(fromStr), algebraicToCoords(toStr)];
   };
 
   const checkConnection = async () => {
@@ -84,18 +101,26 @@ function App() {
   };
 
   const resetMiniGame = () => {
-    game.reset(); // Library reset
-    setBoard([...game.board().map(row => [...row])])
+    game.reset();
+    setBoard([...game.board().map(row => [...row])]);
     setTurn('white');
     setSelectedSquare(null);
     setHighlightedSquares([]);
+    setLegalDestinations([]);
+    setPieceInfoTooltip(null);
+    setFeedbackHtml(null);
+    setSuggestionHtml(null);
     setTimeLeft(60);
     setScore(0);
     setIsGameOver(false);
     setCapturedByWhite([]);
     setCapturedByBlack([]);
-    setGameMessage("White's Turn");
-
+    setCurrentEval(0);
+    setEvalConfidence(null);
+    setEvalThinkTime(null);
+    setAnalyzingMove(false);
+    setLoadingSuggestion(false);
+    setTooltipData(null);
     const playerName = user?.username || user?.email || "White";
     setGameMessage(`${playerName}'s Turn`);
   };
@@ -118,13 +143,11 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const callbackToken = params.get('auth_token');
     const callbackError = params.get('auth_error');
-
     if (callbackToken) {
       localStorage.setItem('auth_token', callbackToken);
       setToken(callbackToken);
       setAuthError('');
     }
-
     if (callbackError) {
       localStorage.removeItem('auth_token');
       setToken('');
@@ -132,7 +155,6 @@ function App() {
       setAuthError(callbackError);
       setView('home');
     }
-
     if (callbackToken || callbackError) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -202,96 +224,102 @@ function App() {
     }
   };
 
-  const calculateHighlights = (move) => {
-    // 1. Guard Clause: If move is null/undefined, return empty array
-    if (!move) return [];
+  // --- Training mode functions ---
+  const handleGetSuggestion = async () => {
+    if (isGameOver || isAiThinking || turn !== 'white') return;
 
-    let fromStr, toStr;
-
-    // 2. Handle Object Format (e.g., { from: 'e2', to: 'e4' })
-    if (typeof move === 'object' && move.from && move.to) {
-      fromStr = move.from;
-      toStr = move.to;
-    }
-    // 3. Handle String Format (e.g., "e2e4")
-    else if (typeof move === 'string' && move.length >= 4) {
-      fromStr = move.substring(0, 2);
-      toStr = move.substring(2, 4);
-    }
-    else {
-      return []; // Fallback for unexpected data
+    if (hideSuggestions) {
+      setSuggestionHtml('<span style="color:#888;">Suggestions are hidden. Disable "Hide suggestions" to see them.</span>');
+      return;
     }
 
-    // Convert "e2" -> {row: 6, col: 4}
-    const fromCoords = algebraicToCoords(fromStr);
-    const toCoords = algebraicToCoords(toStr);
+    setLoadingSuggestion(true);
+    setSuggestionHtml('<span class="spinner" style="margin-right:6px;display:inline-block;"></span> Thinking...');
 
-    return [fromCoords, toCoords];
+    try {
+      const data = await suggestMove(game.fen());
+      let html = `<div class="piece-title">💡 Suggested: ${data.suggested_move}</div>`;
+      html += `<div style="margin:4px 0;">${data.explanation}</div>`;
+      html += `<div style="font-size:0.75rem; color:#555; margin-top:4px;">Confidence: ${(data.confidence * 100).toFixed(0)}%</div>`;
+      setSuggestionHtml(html);
+      // Highlight the suggested move on the board
+      if (data.suggested_move) {
+        const highlights = calculateHighlights(data.suggested_move);
+        setHighlightedSquares(highlights);
+      }
+    } catch (err) {
+      console.error('Suggestion error:', err);
+      setSuggestionHtml('<span style="color:#f85149;">Could not get suggestion.</span>');
+    }
+    setLoadingSuggestion(false);
   };
 
-  const handleHighlightClick = async () => {
-    console.log("Fetching hint from AI...");
+  const doAnalyzePlayerMove = async (fenBefore, uciMove) => {
+    if (hideSuggestions) return;
+
+    setAnalyzingMove(true);
+    setFeedbackHtml('<span class="spinner" style="margin-right:6px;display:inline-block;"></span> Analyzing your move...');
+
     try {
-      const currentFen = game.fen();
-      const data = await analyze(currentFen);
-      console.log("FULL AI DATA:", data);
+      const data = await analyzePlayerMove(fenBefore, uciMove);
+      const ratingClass = 'rating-' + data.rating;
+      const ratingEmoji = {
+        excellent: '🌟', good: '✅', okay: '👍',
+        inaccuracy: '⚠️', mistake: '❌', blunder: '💀'
+      }[data.rating] || '';
 
-      // 1. Check if the 'moves' array exists and has at least one item
-      let moveToShow;
-      // Change this line in handleHighlightClick:
-      if (data.moves && data.moves.length > 0) {
-        // We need data.moves[0].move to get 'd2d4'
-        moveToShow = data.moves[0].move;
-        console.log("Extracted String for Highlight:", moveToShow);
+      let html = `<div class="piece-title">${ratingEmoji} <span class="${ratingClass}">${data.rating.charAt(0).toUpperCase() + data.rating.slice(1)}</span></div>`;
+      html += `<div style="margin:4px 0;">${data.explanation}</div>`;
+      if (data.rating !== 'excellent') {
+        html += `<div style="margin-top:6px; color:#58a6ff;">${data.suggestion}</div>`;
       }
+      html += `<div style="margin-top:6px; font-size:0.75rem; color:#555;">Best: ${data.best_move} | Your rank: #${data.player_move_rank}</div>`;
+      setFeedbackHtml(html);
+    } catch (err) {
+      console.error('Analyze move error:', err);
+      setFeedbackHtml('<span style="color:#f85149;">Could not analyze move.</span>');
+    }
+    setAnalyzingMove(false);
+  };
 
+  const handlePieceSelect = async (square, clientX, clientY) => {
+    if (view !== 'training') return;
+    try {
+      const data = await getPieceInfo(game.fen(), square);
+      setPieceInfoTooltip({
+        name: data.piece_name,
+        color: data.piece_color,
+        square: data.square,
+        rules: data.movement_rules,
+        moveCount: data.legal_destinations.length
+      });
+      // Convert legal_destinations to row/col format
+      const dests = data.legal_destinations.map(d => ({
+        ...algebraicToCoords(d.square),
+        is_capture: d.is_capture
+      }));
+      setLegalDestinations(dests);
+    } catch (err) {
+      console.error('Piece info error:', err);
+    }
+  };
+
+  const handleGetHint = async () => {
+    setLoadingHint(true);
+    try {
+      const data = await analyze(game.fen());
+      let moveToShow;
+      if (data.moves && data.moves.length > 0) {
+        moveToShow = data.moves[0].move;
+      }
       if (moveToShow) {
-        // 2. Calculate the coordinates and update state
         const highlights = calculateHighlights(moveToShow);
         setHighlightedSquares(highlights);
-      } else {
-        console.warn("AI returned an empty moves array.");
       }
-    } catch (error) {
-      console.error("Failed to get highlights:", error);
+    } catch (err) {
+      console.error("Hint Error:", err);
     }
-  };
-
-  // You will also need the inverse of your previous helper:
-  const algebraicToCoords = (algebraic) => {
-    if (!algebraic || algebraic.length < 2) return { row: 0, col: 0 };
-
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const col = letters.indexOf(algebraic[0]);
-    const row = 8 - parseInt(algebraic[1]);
-
-    return { row, col };
-  };
-
-  const parseAlgebraic = (moveStr) => {
-    // 1. Safety Check: If it's an object with a move property, extract the string
-    const str = typeof moveStr === 'object' ? moveStr.move : moveStr;
-
-    if (!str || typeof str !== 'string' || str.length < 4) {
-      console.error("Invalid move string received:", str);
-      return null;
-    }
-
-    try {
-      const colToNum = (char) => char.toLowerCase().charCodeAt(0) - 97; // 'a' is 97
-      const rowToNum = (char) => 8 - parseInt(char);
-
-      const from = { row: rowToNum(str[1]), col: colToNum(str[0]) };
-      const to = { row: rowToNum(str[3]), col: colToNum(str[2]) };
-
-      // final check for NaN
-      if (isNaN(from.row) || isNaN(from.col)) return null;
-
-      return { from, to };
-    } catch (e) {
-      console.error("Parsing error:", e);
-      return null;
-    }
+    setLoadingHint(false);
   };
 
   // --- 4. EFFECTS ---
@@ -299,60 +327,49 @@ function App() {
     consumeAuthCallback();
     verifySession();
   }, []);
+
   useEffect(() => {
     checkConnection();
     const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- INACTIVITY TIMEOUT LOGIC ---
+  // Inactivity timeout
   useEffect(() => {
     if (!user) return;
-
     let timeoutId;
-
     const resetTimer = () => {
       if (timeoutId) clearTimeout(timeoutId);
-
       timeoutId = setTimeout(() => {
-        console.log("Inactivity limit reached. Logging out...");
-        triggerError("Logged out due to inactivity"); // Optional: let the user know why
+        triggerError("Logged out due to inactivity");
         clearAuth();
       }, 10 * 60 * 1000);
     };
-
     const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    activityEvents.forEach(event => {
-      window.addEventListener(event, resetTimer);
-    });
-
+    activityEvents.forEach(event => window.addEventListener(event, resetTimer));
     resetTimer();
-
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
-      activityEvents.forEach(event => {
-        window.removeEventListener(event, resetTimer);
-      });
+      activityEvents.forEach(event => window.removeEventListener(event, resetTimer));
     };
-  }, [user]); // Re-run if the user logs in or out
+  }, [user]);
 
+  // Timed mode countdown
   useEffect(() => {
     let timer;
-    if (view === 'timed' && timeLeft > 0 && !isGameOver) {
-      timer = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
+    if (['timed', 'timed_ai'].includes(view) && timeLeft > 0 && !isGameOver) {
+      timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     } else if (timeLeft === 0 && !isGameOver) {
-      // Trigger Over Here
       setIsGameOver(true);
       setHighlightedSquares([]);
     }
     return () => clearInterval(timer);
   }, [view, timeLeft, isGameOver]);
 
+  // AI move in training / vs-AI modes
   useEffect(() => {
     const makeAiMove = async () => {
-      if (view !== 'training' || turn !== 'black' || isGameOver || game.isGameOver()) {
+      if (!['training', 'classic_ai', 'timed_ai'].includes(view) || turn !== 'black' || isGameOver || game.isGameOver()) {
         if (game.isGameOver() && !isGameOver) {
           setIsGameOver(true);
           const result = game.isCheckmate() ? "Checkmate! White wins!" : "Game Over: Draw!";
@@ -362,29 +379,25 @@ function App() {
       }
 
       try {
+        setIsAiThinking(true);
         setHighlightedSquares([]);
-        console.log("AI is thinking...");
+        setLegalDestinations([]);
+        setPieceInfoTooltip(null);
         const currentFen = game.fen();
         const data = await getMove(currentFen, difficulty || 'medium');
         if (!data) throw new Error("No data received from AI");
-        console.log("AI Move Data received in App.jsx:", data);
 
-        // --- FIX IS HERE ---
-        // We check for 'data.move' (flat object) OR 'data.moves' (array)
         const bestMove = data.move || (data.moves && data.moves[0]?.move);
 
         if (bestMove) {
-          console.log("Applying move to board:", bestMove);
-
           const moveResult = game.move(bestMove);
 
           if (moveResult) {
-            // --- CAPTURE LOGIC FOR AI ---
             if (moveResult.captured) {
               if (moveResult.color === 'b') {
-                setCapturedByBlack(prev => [...prev, moveResult.captured]);
+                setCapturedByBlack(prev => [...prev, { type: moveResult.captured, color: 'w' }]);
               } else {
-                setCapturedByWhite(prev => [...prev, moveResult.captured]);
+                setCapturedByWhite(prev => [...prev, { type: moveResult.captured, color: 'b' }]);
               }
             }
 
@@ -393,83 +406,61 @@ function App() {
             const playerName = user?.username || user?.email || "Your";
             setGameMessage(`AI moved. ${playerName}'s turn!`);
 
+            // Update eval
+            let ev = data.value || 0;
+            setCurrentEval(-ev); // flip for white-relative
+            setEvalConfidence(data.confidence || null);
+            setEvalThinkTime(data.think_time_ms || null);
+
             const aiHighlights = calculateHighlights(bestMove);
             setHighlightedSquares(aiHighlights);
             setTimeout(() => setHighlightedSquares([]), 2000);
-          } else {
-            console.error("Chess.js rejected the move string:", bestMove);
           }
-        } else {
-          console.error("No move found in AI response data structure:", data);
         }
-        // --- END OF FIX ---
-
       } catch (error) {
         console.error("AI Error in Training Mode:", error);
         setGameMessage("AI Error. Check console or try again.");
       }
+      setIsAiThinking(false);
     };
 
     const timer = setTimeout(makeAiMove, 500);
     return () => clearTimeout(timer);
-
   }, [turn, view, isGameOver]);
 
-  const handleSquareClick = (row, col) => {
-    if (highlightedSquares.length > 0) {
-      setHighlightedSquares([]);
-    }
-    const piece = board[row][col];
-
-    // --- 1. SELECTION LOGIC ---
-    if (!selectedSquare) {
-      if (piece) {
-        const isPlayerColor = (turn === 'white' && piece.color === 'w') ||
-          (turn === 'black' && piece.color === 'b');
-        if (isPlayerColor) {
-          setSelectedSquare({ row, col });
-          console.log("Piece Selected:", piece.type, "at", row, col);
-        }
-      }
-      return;
-    }
-
-    // --- 2. MOVE EXECUTION LOGIC ---
-    const from = coordsToAlgebraic(selectedSquare.row, selectedSquare.col);
-    const to = coordsToAlgebraic(row, col);
+  // --- 5. MOVE EXECUTION ---
+  const executeMove = (fromRow, fromCol, toRow, toCol) => {
+    const from = coordsToAlgebraic(fromRow, fromCol);
+    const to = coordsToAlgebraic(toRow, toCol);
+    const fenBefore = game.fen();
 
     try {
       const move = game.move({ from, to, promotion: 'q' });
 
       if (move) {
-        // --- SNIPPET 1: TIMED MODE SCORE ---
-        if (view === 'timed') {
-          // Increase score: 10 for a move, 50 for a capture
+        if (view === 'timed' || view === 'timed_ai') {
           setScore(prev => prev + (move.captured ? 50 : 10));
         }
 
-        // --- CAPTURE LOGIC ---
         if (move.captured) {
           if (move.color === 'w') {
-            setCapturedByWhite(prev => [...prev, move.captured]);
+            setCapturedByWhite(prev => [...prev, { type: move.captured, color: 'b' }]);
           } else {
-            setCapturedByBlack(prev => [...prev, move.captured]);
+            setCapturedByBlack(prev => [...prev, { type: move.captured, color: 'w' }]);
           }
         }
 
-        const updatedBoard = [...game.board().map(row => [...row])];
-        setBoard(updatedBoard);
+        setBoard([...game.board().map(row => [...row])]);
 
-        // --- SNIPPET 2: DYNAMIC TURN TOGGLE ---
-        // Instead of setTurn('black'), we calculate the next turn
         const nextTurn = turn === 'white' ? 'black' : 'white';
         setTurn(nextTurn);
 
         const playerName = user?.username || user?.email || "White";
 
-        // Update message based on mode
         if (view === 'training' && nextTurn === 'black') {
           setGameMessage("My Turn (AI Thinking...)");
+          const uciMove = from + to + (move.flags.includes('p') ? 'q' : '');
+          doAnalyzePlayerMove(fenBefore, uciMove);
         } else {
           const turnName = nextTurn === 'white' ? playerName : "Black";
           setGameMessage(`${turnName}'s Turn`);
@@ -477,37 +468,151 @@ function App() {
 
         setSelectedSquare(null);
         setHighlightedSquares([]);
+        setLegalDestinations([]);
+        setPieceInfoTooltip(null);
+        setTooltipData(null);
+        return true;
       }
     } catch (e) {
+      // move was illegal
+    }
+    return false;
+  };
+
+  // Click handler (fallback for non-drag)
+  const handleSquareClick = (row, col, clientX, clientY) => {
+    if (highlightedSquares.length > 0) setHighlightedSquares([]);
+
+    const piece = board[row][col];
+
+    // Selection logic
+    if (!selectedSquare) {
+      if (piece) {
+        const isPlayerColor = (turn === 'white' && piece.color === 'w') ||
+          (turn === 'black' && piece.color === 'b');
+        if (isPlayerColor) {
+          setSelectedSquare({ row, col });
+          const square = coordsToAlgebraic(row, col);
+          handlePieceSelect(square, clientX, clientY);
+        }
+      }
+      return;
+    }
+
+    // Try to execute move from selected to clicked
+    const moved = executeMove(selectedSquare.row, selectedSquare.col, row, col);
+    if (!moved) {
+      // If click is on own piece, re-select it
       if (piece && ((turn === 'white' && piece.color === 'w') || (turn === 'black' && piece.color === 'b'))) {
         setSelectedSquare({ row, col });
+        const square = coordsToAlgebraic(row, col);
+        handlePieceSelect(square, clientX, clientY);
       } else {
         triggerError("Illegal Move!");
         setSelectedSquare(null);
+        setLegalDestinations([]);
+        setPieceInfoTooltip(null);
+        setTooltipData(null);
       }
     }
   };
 
-  const handleGetHint = async () => {
-    console.log("1. Hint Button Clicked");
+  // Drag-and-drop handler
+  const handleDragMove = (fromRow, fromCol, toRow, toCol) => {
+    const moved = executeMove(fromRow, fromCol, toRow, toCol);
+    if (!moved) {
+      triggerError("Illegal Move!");
+      setSelectedSquare(null);
+      setLegalDestinations([]);
+      setPieceInfoTooltip(null);
+      setTooltipData(null);
+    }
+  };
+
+  // Called when drag ends without a move (same square drop or outside board)
+  const handleDragEnd = () => {
+    // Keep tooltip open but remove dragging opacity (piece returned to home square)
+    setTooltipData(prev => prev ? { ...prev, dragging: false } : null);
+  };
+
+  // Hover enter a square — show tooltip (training mode only)
+  const handleSquareHover = async (row, col, clientX, clientY) => {
+    if (view !== 'training' || isGameOver) return;
+    const piece = board[row][col];
+    if (!piece) {
+      setTooltipData(null);
+      tooltipSquareRef.current = null;
+      return;
+    }
+    const square = coordsToAlgebraic(row, col);
+    tooltipSquareRef.current = square;
     try {
-      const data = await analyze(game.fen());
-      console.log("2. AI Response:", data); // Is 'move' or 'best_move' in here?
-
-      let moveToShow;
-      if (data.moves && data.moves.length > 0) {
-        // We want the 'move' string ('d2d4') from the first object in the array
-        moveToShow = data.moves[0].move;
-      }
-
-      const highlights = calculateHighlights(moveToShow);
-      console.log("3. Calculated Coords:", highlights); // This should now show [{row: 6, col: 3}, {row: 4, col: 3}]
-      setHighlightedSquares(highlights);
+      const data = await getPieceInfo(game.fen(), square);
+      // Only update if we're still hovering the same square (guards against stale async)
+      if (tooltipSquareRef.current !== square) return;
+      setTooltipData({
+        name: data.piece_name,
+        color: data.piece_color,
+        square: data.square,
+        rules: data.movement_rules,
+        moveCount: data.legal_destinations.length,
+        x: clientX,
+        y: clientY
+      });
     } catch (err) {
-      console.error("Hint Error:", err);
+      console.error('Piece hover info error:', err);
     }
   };
-  // --- 5. RENDER ---
+
+  // Hover leave a square — hide tooltip (only if not dragging)
+  const handleSquareLeave = () => {
+    setTooltipData(null);
+    tooltipSquareRef.current = null;
+  };
+
+  // Drag position update — tooltip follows cursor
+  const handleDragPositionUpdate = (clientX, clientY) => {
+    setTooltipData(prev => prev ? { ...prev, x: clientX, y: clientY, dragging: true } : null);
+  };
+
+  const handleUndo = () => {
+    if (isAiThinking) return;
+    if (view === 'training') {
+      game.undo(); // undo AI move
+      game.undo(); // undo player move
+    } else {
+      game.undo();
+    }
+    setBoard([...game.board().map(row => [...row])]);
+    setTurn(game.turn() === 'w' ? 'white' : 'black');
+    setSelectedSquare(null);
+    setHighlightedSquares([]);
+    setLegalDestinations([]);
+    setPieceInfoTooltip(null);
+    setTooltipData(null);
+    setFeedbackHtml(null);
+    const playerName = user?.username || user?.email || "White";
+    setGameMessage(`${playerName}'s Turn`);
+  };
+
+  // --- Move history helper ---
+  const getMoveHistory = () => {
+    const moves = game.history();
+    const pairs = [];
+    for (let i = 0; i < moves.length; i += 2) {
+      pairs.push({
+        num: Math.floor(i / 2) + 1,
+        white: moves[i] || '',
+        black: moves[i + 1] || '',
+      });
+    }
+    return pairs;
+  };
+
+  // --- Eval bar percentage ---
+  const evalPercent = Math.max(2, Math.min(98, (currentEval + 1) / 2 * 100));
+
+  // --- 6. RENDER ---
   if (authChecking) return <div className="app-container"><h1>Loading...</h1></div>;
 
   if (!user) {
@@ -567,6 +672,10 @@ function App() {
               <span className="icon">♟️</span> Classic Chess
               <small>Local Player vs Player</small>
             </button>
+            <button onClick={() => { setView('classic_ai'); resetMiniGame(); }}>
+              <span className="icon">🤖</span> Classic vs AI
+              <small>Player vs Computer</small>
+            </button>
             <button onClick={() => { setView('training'); resetMiniGame(); }}>
               <span className="icon">🎓</span> Training Mode
               <small>AI Evaluation</small>
@@ -574,6 +683,10 @@ function App() {
             <button onClick={() => { setView('timed'); resetMiniGame(); }}>
               <span className="icon">⚡</span> Timed Mini-Game
               <small>Blitz Challenge</small>
+            </button>
+            <button onClick={() => { setView('timed_ai'); resetMiniGame(); }}>
+              <span className="icon">⚡🤖</span> Timed vs AI
+              <small>Blitz vs Computer</small>
             </button>
             <button onClick={() => setView('leaderboard')}>
               <span className="icon">🏆</span> Leaderboards
@@ -584,130 +697,227 @@ function App() {
         </div>
       )}
 
-      {(['classic', 'training', 'timed'].includes(view)) && (
+      {(['classic', 'classic_ai', 'training', 'timed', 'timed_ai'].includes(view)) && (
         <div className="game-view">
           <div className="game-header">
             <button className="exit-btn" onClick={() => { setView('lobby'); resetMiniGame(); }}>← Exit to Lobby</button>
-            <div className="status-badge">Mode: {view.toUpperCase()} | Turn: {turn}</div>
-          </div>
-
-          {/* --- ADD THE TOP MESSAGE BAR HERE --- */}
-          <div className="message-container">
-            {gameMessage && (
-              <div className={`status-toast ${turn === 'white' ? 'white-turn' : 'black-turn'}`}>
-                {gameMessage}
-              </div>
-            )}
+            <div className="status-badge">Mode: {{
+              classic: 'Classic PvP',
+              classic_ai: 'Classic vs AI',
+              training: 'Training',
+              timed: 'Timed Blitz',
+              timed_ai: 'Timed vs AI'
+            }[view]} | Turn: {turn}</div>
           </div>
 
           <div className="game-layout">
-            <div className="board-container">
-              <Board
-                key={game.fen()}
-                board={board}
-                selectedSquare={selectedSquare}
-                onSquareClick={isGameOver ? null : handleSquareClick}
-                highlightedSquares={highlightedSquares}
-              />
+            {/* === LEFT SIDEBAR (Training mode only) === */}
+            <div className={`left-sidebar ${view === 'training' ? 'visible' : ''}`}>
+              <div className="panel">
+                <h3>Training Tools</h3>
+                <div className="controls">
+                  <button
+                    className="btn-training"
+                    onClick={handleGetSuggestion}
+                    disabled={loadingSuggestion || turn !== 'white' || isGameOver}
+                    style={{ width: '100%' }}
+                  >
+                    {loadingSuggestion ? '⏳ Thinking...' : '💡 Get Suggestion'}
+                  </button>
+                  {suggestionHtml && (
+                    <div className="adviser-box" dangerouslySetInnerHTML={{ __html: suggestionHtml }} />
+                  )}
+                  <div className="toggle-row">
+                    <span>Hide suggestions (learn mode)</span>
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={hideSuggestions} onChange={(e) => {
+                        setHideSuggestions(e.target.checked);
+                        if (e.target.checked) setSuggestionHtml(null);
+                      }} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-              {/* Overlays stay inside board-container */}
-              {isGameOver && (
-                <div className="game-over-overlay">
-                  <div className="big-x">❌</div>
-                  <div className="game-over-text">
-                    <h2>TIME'S UP!</h2>
-                    <p>Final Score: {score}</p>
-                    <button className="primary-btn" onClick={resetMiniGame}>Try Again</button>
+              <div className="panel">
+                <h3>Move Analysis</h3>
+                <div className="adviser-box">
+                  {feedbackHtml ? (
+                    <div dangerouslySetInnerHTML={{ __html: feedbackHtml }} />
+                  ) : (
+                    <span style={{ color: '#555' }}>Make a move to see AI analysis.</span>
+                  )}
+                </div>
+              </div>
+
+
+            </div>
+
+            {/* === CENTER: BOARD === */}
+            <div className="board-column">
+              {/* Black's captured pieces (white pieces Black has captured) */}
+              <div className="captured-strip">
+                <span className="captured-strip-label">⬛</span>
+                <div className="piece-list">
+                  {capturedByBlack.map((p, i) => (
+                    <img key={i} className="captured-icon" src={getPieceSrc(p.color, p.type)} alt={p.type} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="board-container" ref={boardRef}>
+                <Board
+                  key={game.fen()}
+                  board={board}
+                  selectedSquare={selectedSquare}
+                  onSquareClick={isGameOver ? null : handleSquareClick}
+                  onDragMove={isGameOver ? null : handleDragMove}
+                  onDragEnd={handleDragEnd}
+                  onSquareHover={handleSquareHover}
+                  onSquareLeave={handleSquareLeave}
+                  onDragUpdate={handleDragPositionUpdate}
+                  highlightedSquares={highlightedSquares}
+                  legalDestinations={legalDestinations}
+                  disabled={isGameOver}
+                />
+
+                {isGameOver && ['timed', 'timed_ai'].includes(view) && (
+                  <div className="game-over-overlay">
+                    <div className="big-x">❌</div>
+                    <div className="game-over-text">
+                      <h2>TIME'S UP!</h2>
+                      <p>Final Score: {score}</p>
+                      <button className="btn-primary" onClick={resetMiniGame}>Try Again</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* White's captured pieces (black pieces White has captured) */}
+              <div className="captured-strip">
+                <span className="captured-strip-label">⬜</span>
+                <div className="piece-list">
+                  {capturedByWhite.map((p, i) => (
+                    <img key={i} className="captured-icon" src={getPieceSrc(p.color, p.type)} alt={p.type} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* === RIGHT SIDEBAR === */}
+            <div className="right-sidebar">
+              {/* Game Controls */}
+              <div className="panel">
+                <h3>Game Controls</h3>
+                <div className="controls">
+                  <div className="btn-row">
+                    <button className="btn-primary" onClick={() => resetMiniGame()}>New Game</button>
+                    <button className="btn-secondary" onClick={handleUndo}>Undo</button>
+                  </div>
+                  {['training', 'classic_ai', 'timed_ai'].includes(view) && (
+                    <>
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#555' }}>AI Difficulty</label>
+                        <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                          <option value="easy">Easy (50 sims)</option>
+                          <option value="medium">Medium (200 sims)</option>
+                          <option value="hard">Hard (400 sims)</option>
+                          <option value="max">Max (800 sims)</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Evaluation (training + vs-AI + timed) */}
+              {(['training', 'timed', 'classic_ai', 'timed_ai'].includes(view)) && (
+                <div className="panel">
+                  <h3>Evaluation</h3>
+                  <div className="eval-bar-container">
+                    <div className="eval-fill" style={{ width: `${evalPercent}%` }}></div>
+                  </div>
+                  <div className="eval-label">
+                    <span>Black</span>
+                    <span>{currentEval.toFixed(2)}</span>
+                    <span>White</span>
+                  </div>
+                  <div style={{ marginTop: '10px' }}>
+                    <div className="info-row">
+                      <span className="info-label">Confidence</span>
+                      <span className="info-value">{evalConfidence ? `${(evalConfidence * 100).toFixed(0)}%` : '—'}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">Think Time</span>
+                      <span className="info-value">{evalThinkTime ? `${evalThinkTime.toFixed(0)}ms` : '—'}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">Move #</span>
+                      <span className="info-value">{Math.ceil(game.history().length / 2)}</span>
+                    </div>
                   </div>
                 </div>
               )}
+
+              {/* Timed mode stats */}
+              {['timed', 'timed_ai'].includes(view) && (
+                <div className="panel">
+                  <h3>Blitz Stats</h3>
+                  <div className="stat-box">SCORE: {score}</div>
+                  <div className="stat-box">TIME: {timeLeft}s</div>
+                  <div className="progress-container-vertical">
+                    <div
+                      className={`progress-fill-vertical ${timeLeft <= 10 ? 'urgent' : ''}`}
+                      style={{ height: `${(timeLeft / 60) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Move History */}
+              <div className="panel">
+                <h3>Move History</h3>
+                <div className="move-history">
+                  {getMoveHistory().length === 0 ? (
+                    <span style={{ color: '#555', fontSize: '0.8rem' }}>No moves yet.</span>
+                  ) : (
+                    getMoveHistory().map((pair) => (
+                      <div key={pair.num} className="move-pair">
+                        <span className="move-number">{pair.num}.</span>
+                        <span className="move-white">{pair.white}</span>
+                        <span className="move-black">{pair.black}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
             </div>
-            {/* --- TRAINING MODE HUD --- */}
-            {view === 'training' && (
-              <div className="side-hud training-hud">
-                <p>Playing as: <strong>White</strong></p>
-
-                <button
-                  className="hint-btn"
-                  onClick={handleGetHint}
-                  disabled={turn !== 'white' || loadingHint}
-                >
-                  {loadingHint ? 'Analyzing...' : 'Best Move?'}
-                </button>
-
-                {/* --- ADD CAPTURED PIECES HERE --- */}
-                <div className="captured-section">
-                  <div className="captured-box">
-                    <small>WHITE CAPTURES</small>
-                    <div className="piece-list">
-                      {capturedByWhite.map((p, i) => (
-                        <span key={i} className="captured-icon">{getUnicodePiece(p)}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="captured-box">
-                    <small>BLACK CAPTURES</small>
-                    <div className="piece-list">
-                      {capturedByBlack.map((p, i) => (
-                        <span key={i} className="captured-icon">{getUnicodePiece(p)}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="eval-bar">
-                  <small>Position Eval: {currentEval}</small>
-                </div>
-              </div>
-            )}
-
-            {/* --- TIMED MODE HUD --- */}
-            {view === 'timed' && (
-              <div className="side-hud">
-                <div className="stat-box">SCORE: {score}</div>
-                <div className="stat-box">TIME: {timeLeft}s</div>
-
-                <div className="progress-container-vertical">
-                  <div
-                    className={`progress-fill-vertical ${timeLeft <= 10 ? 'urgent' : ''}`}
-                    style={{ height: `${(timeLeft / 60) * 100}%` }}
-                  ></div>
-                </div>
-
-                {/* Captured Pieces Gallery */}
-                <div className="captured-box">
-                  <small>WHITE CAPTURES</small>
-                  <div className="piece-list">
-                    {capturedByWhite.map((p, i) => (
-                      <span key={i} className="captured-icon">{getUnicodePiece(p)}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="captured-box">
-                  <small>BLACK CAPTURES</small>
-                  <div className="piece-list">
-                    {capturedByBlack.map((p, i) => (
-                      <span key={i} className="captured-icon">{getUnicodePiece(p)}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* This button uses your local logic for valid moves */}
-                <button className="highlight-btn" onClick={handleHighlightClick}>Ai Suggest?</button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* CONNECTION DOT - Root Level */}
+      {/* CONNECTION INDICATOR */}
       <div className="connection-indicator">
         <span className={`dot ${backendStatus}`}></span>
         <span className="status-text">Server Status</span>
         <button className="retry-btn" onClick={checkConnection}>🔄</button>
       </div>
+
+      {/* FLOATING TOOLTIP (training mode) */}
+      {tooltipData && (
+        <div
+          className="adviser-tooltip"
+          style={{ left: tooltipData.x + 15, top: tooltipData.y - 10, opacity: tooltipData.dragging ? 0.5 : 1 }}
+        >
+          <div className="piece-title">{tooltipData.name} ({tooltipData.color}) on {tooltipData.square}</div>
+          <div className="movement-rules">{tooltipData.rules}</div>
+          <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#58a6ff' }}>
+            {tooltipData.moveCount} legal move{tooltipData.moveCount !== 1 ? 's' : ''} available
+          </div>
+        </div>
+      )}
     </div>
   );
 }

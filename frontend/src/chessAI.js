@@ -59,3 +59,48 @@ export async function analyze(fen, numSims = 400) {
 
   return res.json();
 }
+
+export async function analyzePlayerMove(fen, playerMove) {
+  const res = await fetch(getEndpoint('/api/training/analyze-move'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fen, player_move: playerMove }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`/api/training/analyze-move failed (${res.status}): ${body}`);
+  }
+
+  return res.json();
+}
+
+export async function suggestMove(fen) {
+  const res = await fetch(getEndpoint('/api/training/suggest'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fen }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`/api/training/suggest failed (${res.status}): ${body}`);
+  }
+
+  return res.json();
+}
+
+export async function getPieceInfo(fen, square) {
+  const res = await fetch(getEndpoint('/api/training/piece-info'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fen, square }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`/api/training/piece-info failed (${res.status}): ${body}`);
+  }
+
+  return res.json();
+}
