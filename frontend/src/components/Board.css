@@ -1,102 +1,93 @@
+/* Board grid */
 .chess-board {
     display: grid;
-    /* Create 8 equal columns and rows */
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-
-    width: 85vmin;
-    height: 85vmin;
-    border: 4px solid #333;
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    width: 100%;
+    aspect-ratio: 1;
+    border: 3px solid #0f3460;
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
     user-select: none;
-    /* Ensure nothing spills out */
     overflow: hidden;
+    position: relative;
 }
 
-/* --- Base Square Styles --- */
+/* Squares */
 .square {
     position: relative;
-    flex: 1;
-    /* Works with your flex-direction: column board */
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: visible !important;
-    /* Ensures the glow isn't cut off */
+    cursor: pointer;
+    transition: background-color 0.1s;
 }
 
-/* Match the classes used in your Board.jsx */
-.light-square {
-    background-color: #f0d9b5;
-}
+.light-square { background-color: #f0d9b5; }
+.dark-square { background-color: #b58863; }
 
-.dark-square {
-    background-color: #b58863;
-}
-
-/* Selection Highlight */
 .square.selected {
     background-color: #bbc944 !important;
     z-index: 2;
 }
 
-/* Using the board class + square class makes this higher priority than base colors */
+/* Hint highlights (green pulse dots) */
 .chess-board .square.highlighted {
-    background-color: rgba(46, 204, 113, 0.8) !important;
-    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5) !important;
-    z-index: 10 !important;
-    border: 2px solid #2ecc71 !important;
-    /* Added border for extra visibility */
+    background-color: rgba(46, 204, 113, 0.6) !important;
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.4) !important;
+    z-index: 10;
+    border: 2px solid #2ecc71;
 }
 
-/* Force the dot to appear above everything */
 .chess-board .square.highlighted::after {
-    content: '' !important;
-    position: absolute !important;
-    width: 25px !important;
-    height: 25px !important;
-    background: #2ecc71 !important;
-    border-radius: 50% !important;
-    z-index: 999 !important;
-    /* Extremely high z-index */
-    box-shadow: 0 0 20px 10px rgba(46, 204, 113, 0.7) !important;
-    animation: hint-pulse 1s infinite ease-in-out !important;
-    display: block !important;
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: #2ecc71;
+    border-radius: 50%;
+    z-index: 999;
+    box-shadow: 0 0 16px 8px rgba(46, 204, 113, 0.6);
+    animation: hint-pulse 1s infinite ease-in-out;
 }
 
 @keyframes hint-pulse {
-    0% {
-        transform: translate(-50%, -50%) scale(0.7);
-        opacity: 0.6;
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translate(-50%, -50%) scale(0.7);
-        opacity: 0.6;
-    }
+    0%, 100% { transform: scale(0.7); opacity: 0.6; }
+    50% { transform: scale(1.2); opacity: 1; }
 }
 
-.piece-image {
+/* Legal move highlights (training mode) */
+.square.highlight-legal {
+    background: radial-gradient(circle, rgba(20,163,168,0.5) 25%, transparent 25%) !important;
+}
+
+.square.highlight-capture {
+    background: radial-gradient(circle, rgba(233,69,96,0.6) 25%, transparent 25%) !important;
+}
+
+/* SVG Pieces */
+.piece-img {
     width: 85%;
     height: 85%;
+    pointer-events: none;
     z-index: 5;
-    /* Pieces sit above the square but below the highlight dot */
     position: relative;
 }
 
-.piece-unicode {
-    font-size: 8vmin;
-    line-height: 1;
-    /* Shadow makes white pieces pop on light squares */
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+/* Ghost piece on source square during drag */
+.piece-ghost {
+    opacity: 0.3;
 }
 
-.piece-image {
-    width: 85%;
-    height: 85%;
+/* Floating drag piece that follows cursor */
+.piece-dragging {
+    position: fixed;
+    width: 70px;
+    height: 70px;
+    pointer-events: none;
+    z-index: 10000;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
+
+
