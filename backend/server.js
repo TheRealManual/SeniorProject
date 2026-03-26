@@ -10,6 +10,7 @@ app.use(express.json());
 // 3. The rest of your imports
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const fetch = global.fetch || require('node-fetch');
 const chessAI = require('./chessAI');
 
 
@@ -370,6 +371,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     const redirectTarget = `${frontendOrigin}/?auth_token=${encodeURIComponent(token)}`
     return res.redirect(redirectTarget)
   } catch (error) {
+    console.error('Discord OAuth callback failed:', error)
     return redirectWithError('Discord sign-in failed')
   }
 })
