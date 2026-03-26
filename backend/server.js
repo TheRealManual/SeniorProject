@@ -160,16 +160,19 @@ const userSchema = new mongoose.Schema(
         wins: { type: Number, default: 0 },
         losses: { type: Number, default: 0 },
         draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
       },
       training: {
         wins: { type: Number, default: 0 },
         losses: { type: Number, default: 0 },
         draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
       },
       timed: {
         wins: { type: Number, default: 0 },
         losses: { type: Number, default: 0 },
         draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
       },
     },
   },
@@ -485,7 +488,7 @@ app.post('/api/chess/analyze', async (req, res) => {
 
 app.post('/api/games/resign', authRequired, async (req, res) => {
   try {
-    const { gameMode, resigned_by, winner, fen, score } = req.body
+    const { gameMode, resigned_by, winner, fen, score, opponentId } = req.body
     const userId = req.user._id
 
     // Determine the game result status
@@ -506,20 +509,34 @@ app.post('/api/games/resign', authRequired, async (req, res) => {
     // Save the game session to database
     await gameSession.save()
 
-    // Update the player's statistics
-    // The player who resigned gets a loss marked
+    // Validate game mode
     const validGameMode = ['classic', 'training', 'timed'].includes(gameMode) ? gameMode : 'classic'
     
+    // Update loser's statistics
     await User.findByIdAndUpdate(
       userId,
       {
-        // Increment the loss counter for this game mode
         $inc: {
           [`gameStats.${validGameMode}.losses`]: 1,
+          [`gameStats.${validGameMode}.rating`]: -16, // Rating decrease on loss
         },
       },
       { new: true }
     )
+
+    // If opponent ID provided, update winner's statistics (AI games may not have opponent)
+    if (opponentId) {
+      await User.findByIdAndUpdate(
+        opponentId,
+        {
+          $inc: {
+            [`gameStats.${validGameMode}.wins`]: 1,
+            [`gameStats.${validGameMode}.rating`]: 16, // Rating increase on win
+          },
+        },
+        { new: true }
+      )
+    }
 
     res.json({ ok: true, message: 'Resignation recorded', gameSession })
   } catch (err) {
@@ -545,6 +562,7 @@ app.get('/api/leaderboard', async (req, res) => {
         $project: {
           username: 1,
           email: 1,
+          rating: `$gameStats.${gameMode}.rating`,
           wins: `$gameStats.${gameMode}.wins`,
           losses: `$gameStats.${gameMode}.losses`,
           draws: `$gameStats.${gameMode}.draws`,
@@ -581,9 +599,10 @@ app.get('/api/leaderboard', async (req, res) => {
           },
         },
       },
-      // Sort by wins (descending), then by win rate (descending), then by total games (descending)
+      // Sort by rating (descending), then by wins (descending), then by win rate (descending)
+      // This matches Chess.com's leaderboard system where rating is the primary sort
       {
-        $sort: { wins: -1, winRate: -1, totalGames: -1 },
+        $sort: { rating: -1, wins: -1, winRate: -1 },
       },
       // Pagination: skip and limit
       { $skip: parseInt(offset) || 0 },
@@ -649,12 +668,60 @@ app.get('/api/leaderboard/my-rank', authRequired, async (req, res) => {
         draws: stats.draws,
         totalGames,
         winRate: parseFloat(winRate),
+        rating: user.gameStats[gameMode].rating,
       },
       rank: rank + 1, // 1-indexed rank
     })
   } catch (err) {
     console.error('My rank error:', err.message, err)
     res.status(500).json({ error: 'Failed to fetch personal rank', details: err.message })
+  }
+})
+
+// GET /api/game-history - Get user's recent games
+// Requires authentication
+app.get('/api/game-history', authRequired, async (req, res) => {
+  try {
+    const { mode = 'classic', limit = 20, offset = 0 } = req.query
+    const userId = req.user._id
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+
+    // Fetch user's recent games sorted by date (newest first)
+    const games = await GameSession.find({ userId, gameMode })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) || 20)
+      .skip(parseInt(offset) || 0)
+
+    // Get total count
+    const totalCount = await GameSession.countDocuments({ userId, gameMode })
+
+    // Format response
+    const formattedGames = games.map(game => ({
+      id: game._id,
+      mode: game.gameMode,
+      result: game.result,
+      winner: game.winner,
+      score: game.score,
+      moveCount: game.moveCount,
+      date: game.createdAt,
+      // Show brief result description (e.g., "Won by checkmate", "Lost by resignation")
+      description: game.result.includes('resigned') 
+        ? `${game.winner === 'white' ? 'Won' : 'Lost'} by resignation`
+        : game.result,
+    }))
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      games: formattedGames,
+      totalCount,
+      offset: parseInt(offset) || 0,
+      limit: parseInt(limit) || 20,
+    })
+  } catch (err) {
+    console.error('Game history error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch game history', details: err.message })
   }
 })
 

@@ -44,6 +44,7 @@ function App() {
   const [difficulty, setDifficulty] = useState('medium'); // Default to medium
   // Inside App.jsx, near line 20-30
   const [gameMessage, setGameMessage] = useState("White's Turn"); // <-- Add this here
+  const [aiMoveInProgress, setAiMoveInProgress] = useState(false); // Prevent simultaneous AI moves
   // AUTH STATES
   const [user, setUser] = useState(null);
   const [token, setToken] = useState('');
@@ -361,15 +362,24 @@ function App() {
 
   useEffect(() => {
     const makeAiMove = async () => {
-      if (view !== 'training' || turn !== 'black' || isGameOver || game.isGameOver()) {
-        if (game.isGameOver() && !isGameOver) {
-          setIsGameOver(true);
-          const result = game.isCheckmate() ? "Checkmate! White wins!" : "Game Over: Draw!";
-          setGameMessage(result);
-        }
+      // Prevent multiple simultaneous AI moves
+      if (aiMoveInProgress) return;
+
+      // Early return: only skip if not in training, wrong turn, or game already over
+      if (view !== 'training' || turn !== 'black' || isGameOver) {
         return;
       }
 
+      // Check for actual game over BEFORE trying to move
+      const isActuallyGameOver = game.isCheckmate() || game.isStalemate();
+      if (isActuallyGameOver && !isGameOver) {
+        setIsGameOver(true);
+        const result = game.isCheckmate() ? "Checkmate! Black wins!" : "Game Over: Draw!";
+        setGameMessage(result);
+        return;
+      }
+
+      setAiMoveInProgress(true);
       try {
         setHighlightedSquares([]);
         console.log("AI is thinking...");
@@ -385,7 +395,7 @@ function App() {
         if (bestMove) {
           console.log("Applying move to board:", bestMove);
 
-          const moveResult = game.move(bestMove);
+          const moveResult = game.move(bestMove, { sloppy: true });
 
           if (moveResult) {
             // --- CAPTURE LOGIC FOR AI ---
@@ -399,30 +409,44 @@ function App() {
 
             setBoard([...game.board().map(row => [...row])]);
             setTurn('white');
-            const playerName = user?.username || user?.email || "Your";
-            setGameMessage(`AI moved. ${playerName}'s turn!`);
+            
+            // Check if player is now in checkmate/stalemate after AI's move
+            if (game.isCheckmate()) {
+              setGameMessage("Checkmate! AI wins!");
+              setIsGameOver(true);
+            } else if (game.isStalemate()) {
+              setGameMessage("Stalemate! Draw!");
+              setIsGameOver(true);
+            } else {
+              const playerName = user?.username || user?.email || "Your";
+              setGameMessage(`AI moved. ${playerName}'s turn!`);
+            }
 
             const aiHighlights = calculateHighlights(bestMove);
             setHighlightedSquares(aiHighlights);
             setTimeout(() => setHighlightedSquares([]), 2000);
           } else {
-            console.error("Chess.js rejected the move string:", bestMove);
+            console.error("Chess.js rejected the move string:", bestMove, "From FEN:", currentFen);
+            triggerError(`Invalid AI move: ${bestMove}. Skipping...`);
           }
         } else {
           console.error("No move found in AI response data structure:", data);
+          triggerError("AI returned empty move");
         }
         // --- END OF FIX ---
 
       } catch (error) {
         console.error("AI Error in Training Mode:", error);
-        setGameMessage("AI Error. Check console or try again.");
+        setGameMessage("AI encountered an issue. Your turn.");
+      } finally {
+        setAiMoveInProgress(false);
       }
     };
 
     const timer = setTimeout(makeAiMove, 500);
     return () => clearTimeout(timer);
 
-  }, [turn, view, isGameOver]);
+  }, [turn, view, isGameOver, aiMoveInProgress]);
 
   const handleSquareClick = (row, col) => {
     if (highlightedSquares.length > 0) {
@@ -620,7 +644,15 @@ function App() {
     }
   };
   // --- 5. RENDER ---
-  if (authChecking) return <div className="app-container"><h1>Loading...</h1></div>;
+
+  // Render auth page or loading screen as conditional JSX (not early return!)
+  if (authChecking) {
+    return (
+      <div className="app-container">
+        <h1>Loading...</h1>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -644,13 +676,6 @@ function App() {
     );
   }
 
-  // Fetch leaderboard data when view changes to leaderboard
-  useEffect(() => {
-    if (view === 'leaderboard') {
-      fetchLeaderboard(leaderboardMode, 0);
-      fetchPersonalRank(leaderboardMode);
-    }
-  }, [view]);
 
   return (
     <div className="app-container">
@@ -695,7 +720,11 @@ function App() {
               <span className="icon">⚡</span> Timed Mini-Game
               <small>Blitz Challenge</small>
             </button>
-            <button onClick={() => setView('leaderboard')}>
+            <button onClick={() => {
+              setView('leaderboard');
+              fetchLeaderboard('classic', 0);
+              fetchPersonalRank('classic');
+            }}>
               <span className="icon">🏆</span> Leaderboards
               <small>Top Scores</small>
             </button>
@@ -870,8 +899,12 @@ function App() {
               <div className="loading">Loading personal stats...</div>
             ) : personalRank ? (
               <div className="personal-stats">
-                <h3>Your Stats ({leaderboardMode})</h3>
+                <h3>Your Stats ({leaderboardMode === 'classic' ? '♟️ Classic' : leaderboardMode === 'training' ? '🎓 Training' : '⚡ Timed'})</h3>
                 <div className="stat-card">
+                  <div className="stat-row">
+                    <span>Rating</span>
+                    <strong>{personalRank.stats.rating || 0}</strong>
+                  </div>
                   <div className="stat-row">
                     <span>Rank</span>
                     <strong>#{personalRank.rank}</strong>
@@ -905,12 +938,13 @@ function App() {
               <div className="loading">Loading leaderboard...</div>
             ) : leaderboardData.length > 0 ? (
               <div className="leaderboard-table">
-                <h3>Top Players ({leaderboardMode})</h3>
+                <h3>Top Players ({leaderboardMode === 'classic' ? '♟️ Classic' : leaderboardMode === 'training' ? '🎓 Training' : '⚡ Timed'})</h3>
                 <table>
                   <thead>
                     <tr>
                       <th>Rank</th>
                       <th>Player</th>
+                      <th>Rating</th>
                       <th>Wins</th>
                       <th>Losses</th>
                       <th>Draws</th>
@@ -923,6 +957,7 @@ function App() {
                       <tr key={player._id} className={player.username === user?.username ? 'current-user' : ''}>
                         <td className="rank-cell">{leaderboardOffset + index + 1}</td>
                         <td className="player-cell">{player.username || player.email}</td>
+                        <td className="rating-cell"><strong>{player.rating || 0}</strong></td>
                         <td>{player.wins}</td>
                         <td>{player.losses}</td>
                         <td>{player.draws}</td>
