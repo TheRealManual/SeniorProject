@@ -53,6 +53,15 @@ function App() {
   const [authError, setAuthError] = useState('');
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' });
 
+  // LEADERBOARD STATES
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardMode, setLeaderboardMode] = useState('classic');
+  const [leaderboardOffset, setLeaderboardOffset] = useState(0);
+  const [leaderboardTotal, setLeaderboardTotal] = useState(0);
+  const [personalRank, setPersonalRank] = useState(null);
+  const [personalRankLoading, setPersonalRankLoading] = useState(false);
+
   const apiUrl = import.meta.env.MODE === 'development'
     ? (import.meta.env.VITE_API_URL_DEV || 'http://localhost:3001')
     : import.meta.env.VITE_API_URL_PROD;
@@ -508,6 +517,75 @@ function App() {
     }
   };
 
+  // --- LEADERBOARD FUNCTIONS ---
+  // Fetch the leaderboard data based on current mode and pagination
+  const fetchLeaderboard = async (mode = 'classic', offset = 0) => {
+    setLeaderboardLoading(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/leaderboard?mode=${mode}&limit=50&offset=${offset}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch leaderboard: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setLeaderboardData(data.leaderboard || []);
+      setLeaderboardTotal(data.totalCount || 0);
+      setLeaderboardOffset(offset);
+    } catch (err) {
+      console.error('Leaderboard fetch error:', err);
+      triggerError('Failed to fetch leaderboard');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  };
+
+  // Fetch personal rank and statistics
+  const fetchPersonalRank = async (mode = 'classic') => {
+    setPersonalRankLoading(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/leaderboard/my-rank?mode=${mode}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch personal rank: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setPersonalRank(data);
+    } catch (err) {
+      console.error('Personal rank fetch error:', err);
+      triggerError('Failed to fetch personal rank');
+    } finally {
+      setPersonalRankLoading(false);
+    }
+  };
+
+  // Handle leaderboard mode filter change
+  const handleLeaderboardModeChange = (newMode) => {
+    setLeaderboardMode(newMode);
+    setLeaderboardOffset(0);
+    fetchLeaderboard(newMode, 0);
+    fetchPersonalRank(newMode);
+  };
+
   const handleResign = async () => {
     try {
       // Determine which side won (opposite of who resigned)
@@ -565,6 +643,14 @@ function App() {
       </div>
     );
   }
+
+  // Fetch leaderboard data when view changes to leaderboard
+  useEffect(() => {
+    if (view === 'leaderboard') {
+      fetchLeaderboard(leaderboardMode, 0);
+      fetchPersonalRank(leaderboardMode);
+    }
+  }, [view]);
 
   return (
     <div className="app-container">
@@ -743,6 +829,136 @@ function App() {
                 {/* This button uses your local logic for valid moves */}
                 <button className="highlight-btn" onClick={handleHighlightClick}>Ai Suggest?</button>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LEADERBOARD VIEW */}
+      {view === 'leaderboard' && (
+        <div className="leaderboard-view">
+          <div className="leaderboard-header">
+            <h2>🏆 Leaderboards</h2>
+            <button className="back-btn" onClick={() => setView('lobby')}>← Back to Lobby</button>
+          </div>
+
+          {/* Game Mode Filters */}
+          <div className="mode-filter-buttons">
+            <button
+              className={`mode-btn ${leaderboardMode === 'classic' ? 'active' : ''}`}
+              onClick={() => handleLeaderboardModeChange('classic')}
+            >
+              ♟️ Classic
+            </button>
+            <button
+              className={`mode-btn ${leaderboardMode === 'training' ? 'active' : ''}`}
+              onClick={() => handleLeaderboardModeChange('training')}
+            >
+              🎓 Training
+            </button>
+            <button
+              className={`mode-btn ${leaderboardMode === 'timed' ? 'active' : ''}`}
+              onClick={() => handleLeaderboardModeChange('timed')}
+            >
+              ⚡ Timed
+            </button>
+          </div>
+
+          <div className="leaderboard-content">
+            {/* Personal Stats Section */}
+            {personalRankLoading ? (
+              <div className="loading">Loading personal stats...</div>
+            ) : personalRank ? (
+              <div className="personal-stats">
+                <h3>Your Stats ({leaderboardMode})</h3>
+                <div className="stat-card">
+                  <div className="stat-row">
+                    <span>Rank</span>
+                    <strong>#{personalRank.rank}</strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>Wins</span>
+                    <strong>{personalRank.stats.wins}</strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>Losses</span>
+                    <strong>{personalRank.stats.losses}</strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>Draws</span>
+                    <strong>{personalRank.stats.draws}</strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>Total Games</span>
+                    <strong>{personalRank.stats.totalGames}</strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>Win Rate</span>
+                    <strong>{personalRank.stats.winRate}%</strong>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Leaderboard Table */}
+            {leaderboardLoading ? (
+              <div className="loading">Loading leaderboard...</div>
+            ) : leaderboardData.length > 0 ? (
+              <div className="leaderboard-table">
+                <h3>Top Players ({leaderboardMode})</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Player</th>
+                      <th>Wins</th>
+                      <th>Losses</th>
+                      <th>Draws</th>
+                      <th>Total</th>
+                      <th>Win Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboardData.map((player, index) => (
+                      <tr key={player._id} className={player.username === user?.username ? 'current-user' : ''}>
+                        <td className="rank-cell">{leaderboardOffset + index + 1}</td>
+                        <td className="player-cell">{player.username || player.email}</td>
+                        <td>{player.wins}</td>
+                        <td>{player.losses}</td>
+                        <td>{player.draws}</td>
+                        <td>{player.totalGames}</td>
+                        <td>{player.winRate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Pagination Controls */}
+                <div className="pagination-controls">
+                  <button
+                    onClick={() => handleLeaderboardModeChange(leaderboardMode)}
+                    disabled={leaderboardOffset === 0}
+                  >
+                    ← Previous
+                  </button>
+                  <span className="pagination-info">
+                    Showing {leaderboardOffset + 1}-{Math.min(leaderboardOffset + 50, leaderboardTotal)} of {leaderboardTotal}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const newOffset = leaderboardOffset + 50;
+                      if (newOffset < leaderboardTotal) {
+                        fetchLeaderboard(leaderboardMode, newOffset);
+                      }
+                    }}
+                    disabled={leaderboardOffset + 50 >= leaderboardTotal}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">No players found for this mode yet.</div>
             )}
           </div>
         </div>

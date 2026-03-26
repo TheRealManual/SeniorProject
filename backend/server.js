@@ -528,6 +528,136 @@ app.post('/api/games/resign', authRequired, async (req, res) => {
   }
 })
 
+// GET /api/leaderboard - Retrieve top players ranked by wins
+// Supports filtering by game mode (classic, training, timed) and pagination
+// Query params: mode (default: classic), limit (default: 50), offset (default: 0)
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const { mode = 'classic', limit = 50, offset = 0 } = req.query
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+
+    // Calculate win rate for sorting
+    // Project only the fields we need for leaderboard display
+    const leaderboard = await User.aggregate([
+      // Project relevant fields
+      {
+        $project: {
+          username: 1,
+          email: 1,
+          wins: `$gameStats.${gameMode}.wins`,
+          losses: `$gameStats.${gameMode}.losses`,
+          draws: `$gameStats.${gameMode}.draws`,
+          totalGames: {
+            $add: [
+              `$gameStats.${gameMode}.wins`,
+              `$gameStats.${gameMode}.losses`,
+              `$gameStats.${gameMode}.draws`,
+            ],
+          },
+        },
+      },
+      // Only include players who have played at least one game
+      {
+        $match: {
+          totalGames: { $gt: 0 },
+        },
+      },
+      // Add calculated win rate field
+      {
+        $addFields: {
+          winRate: {
+            $round: [
+              {
+                $multiply: [
+                  {
+                    $divide: ['$wins', '$totalGames'],
+                  },
+                  100,
+                ],
+              },
+              2,
+            ],
+          },
+        },
+      },
+      // Sort by wins (descending), then by win rate (descending), then by total games (descending)
+      {
+        $sort: { wins: -1, winRate: -1, totalGames: -1 },
+      },
+      // Pagination: skip and limit
+      { $skip: parseInt(offset) || 0 },
+      { $limit: parseInt(limit) || 50 },
+    ])
+
+    // Get total count for pagination info
+    const totalCount = await User.countDocuments({
+      [`gameStats.${gameMode}.totalGames`]: { $exists: true },
+    })
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      leaderboard,
+      totalCount,
+      offset: parseInt(offset) || 0,
+      limit: parseInt(limit) || 50,
+    })
+  } catch (err) {
+    console.error('Leaderboard error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch leaderboard', details: err.message })
+  }
+})
+
+// GET /api/leaderboard/my-rank - Get personal leaderboard stats and rank
+// Requires authentication
+app.get('/api/leaderboard/my-rank', authRequired, async (req, res) => {
+  try {
+    const { mode = 'classic' } = req.query
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+    const userId = req.user._id
+
+    // Get the current user's stats
+    const user = await User.findById(userId)
+    const stats = user.gameStats[gameMode]
+    const totalGames = stats.wins + stats.losses + stats.draws
+
+    // Calculate win rate
+    const winRate = totalGames > 0 ? ((stats.wins / totalGames) * 100).toFixed(2) : 0
+
+    // Find the user's rank by counting players with better win records
+    const rank = await User.countDocuments({
+      $expr: {
+        $gt: [
+          {
+            $getField: `gameStats.${gameMode}.wins`,
+          },
+          stats.wins,
+        ],
+      },
+    })
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      username: user.username,
+      email: user.email,
+      stats: {
+        wins: stats.wins,
+        losses: stats.losses,
+        draws: stats.draws,
+        totalGames,
+        winRate: parseFloat(winRate),
+      },
+      rank: rank + 1, // 1-indexed rank
+    })
+  } catch (err) {
+    console.error('My rank error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch personal rank', details: err.message })
+  }
+})
+
 const start = async () => {
   try {
     if (!process.env.MONGO_URI) {
