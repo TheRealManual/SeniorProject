@@ -108,6 +108,7 @@ const getBackendBaseUrl = (req) => {
 
 const allowedOrigins = Array.from(new Set([
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
   ...configuredOrigins,
 ])).filter(Boolean)
@@ -512,13 +513,19 @@ app.post('/api/games/resign', authRequired, async (req, res) => {
     // Validate game mode
     const validGameMode = ['classic', 'training', 'timed'].includes(gameMode) ? gameMode : 'classic'
     
-    // Update loser's statistics
+    // Update loser's statistics with minimum rating floor of 0
+    const loserUser = await User.findById(userId)
+    const currentLoserRating = loserUser.gameStats[validGameMode].rating || 0
+    const newLoserRating = Math.max(0, currentLoserRating - 16) // Floor at 0
+    
     await User.findByIdAndUpdate(
       userId,
       {
         $inc: {
           [`gameStats.${validGameMode}.losses`]: 1,
-          [`gameStats.${validGameMode}.rating`]: -16, // Rating decrease on loss
+        },
+        $set: {
+          [`gameStats.${validGameMode}.rating`]: newLoserRating,
         },
       },
       { new: true }
@@ -766,6 +773,19 @@ const start = async () => {
 
     await mongoose.connect(process.env.MONGO_URI)
     console.log('Connected to MongoDB')
+
+    // Fix: Apply rating floor of 0 to all existing negative ratings
+    const modes = ['classic', 'training', 'timed']
+    for (const mode of modes) {
+      const users = await User.find({ [`gameStats.${mode}.rating`]: { $lt: 0 } })
+      for (const user of users) {
+        user.gameStats[mode].rating = 0
+        await user.save()
+      }
+      if (users.length > 0) {
+        console.log(`Fixed ${users.length} users with negative ratings in ${mode} mode`)
+      }
+    }
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`)
