@@ -725,6 +725,39 @@ app.get('/api/game-history', authRequired, async (req, res) => {
   }
 })
 
+app.post('/api/chess/training/analyze-move', async (req, res) => {
+  try {
+    const { fen, player_move } = req.body
+    if (!fen || !player_move) return res.status(400).json({ error: 'fen and player_move are required' })
+    const data = await chessAI.analyzePlayerMove(fen, player_move)
+    res.json(data)
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+app.post('/api/chess/training/suggest', async (req, res) => {
+  try {
+    const { fen } = req.body
+    if (!fen) return res.status(400).json({ error: 'fen is required' })
+    const data = await chessAI.suggestMove(fen)
+    res.json(data)
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+app.post('/api/chess/training/piece-info', async (req, res) => {
+  try {
+    const { fen, square } = req.body
+    if (!fen || !square) return res.status(400).json({ error: 'fen and square are required' })
+    const data = await chessAI.getPieceInfo(fen, square)
+    res.json(data)
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
 const start = async () => {
   try {
     if (!process.env.MONGO_URI) {
