@@ -507,6 +507,40 @@ function App() {
       console.error("Hint Error:", err);
     }
   };
+
+  const handleResign = async () => {
+    try {
+      // Determine which side won (opposite of who resigned)
+      const resignedSide = turn === 'white' ? 'black' : 'white';
+      
+      // Send resignation to backend with game details
+      const response = await fetch(`${apiUrl}/api/games/resign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // Send auth token
+        },
+        body: JSON.stringify({
+          gameMode: view, // classic, training, or timed
+          resigned_by: turn, // white or black
+          winner: resignedSide, // opposite side wins
+          fen: game.fen(), // board position at resignation
+          score: score, // final score
+        }),
+      });
+
+      if (response.ok) {
+        // Show the resignation message and end the game
+        setGameMessage(`${turn === 'white' ? 'White' : 'Black'} resigned. ${resignedSide === 'black' ? 'Black' : 'White'} wins!`);
+        setIsGameOver(true);
+      } else {
+        triggerError('Failed to record resignation');
+      }
+    } catch (error) {
+      console.error('Resignation error:', error);
+      triggerError('Error processing resignation');
+    }
+  };
   // --- 5. RENDER ---
   if (authChecking) return <div className="app-container"><h1>Loading...</h1></div>;
 
@@ -611,18 +645,30 @@ function App() {
               />
 
               {/* Overlays stay inside board-container */}
-              {isGameOver && (
+              {/* Show game-over screen only for AI modes (timed/training), not for PvP classic */}
+              {isGameOver && (view === 'timed' || view === 'training') && (
                 <div className="game-over-overlay">
                   <div className="big-x">❌</div>
                   <div className="game-over-text">
-                    <h2>TIME'S UP!</h2>
-                    <p>Final Score: {score}</p>
+                    {/* Timed mode shows "TIME'S UP!" with final score */}
+                    {view === 'timed' ? (
+                      <>
+                        <h2>TIME'S UP!</h2>
+                        <p>Final Score: {score}</p>
+                      </>
+                    ) : (
+                      // Training mode shows game result (resignation, checkmate, etc)
+                      <h2>{gameMessage}</h2>
+                    )}
+                    {/* Try Again button resets the game in-place for AI modes */}
                     <button className="primary-btn" onClick={resetMiniGame}>Try Again</button>
                   </div>
                 </div>
               )}
             </div>
-            {/* --- TRAINING MODE HUD --- */}
+            {/* --- RESIGN BUTTON BELOW BOARD --- */}
+            {/* Allows players to give up during a game */}
+            <button className="resign-game-btn" onClick={handleResign} disabled={isGameOver}>🚩 Resign</button>
             {view === 'training' && (
               <div className="side-hud training-hud">
                 <p>Playing as: <strong>White</strong></p>

@@ -153,11 +153,76 @@ const userSchema = new mongoose.Schema(
       enum: ['local', 'discord'],
       default: 'local',
     },
+    // Tracks win/loss/draw statistics for each game mode
+    // Used for leaderboards and player rankings
+    gameStats: {
+      classic: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+      },
+      training: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+      },
+      timed: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+      },
+    },
   },
   { timestamps: true }
 )
 
 const User = mongoose.models.User || mongoose.model('User', userSchema)
+
+const gameSessionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    // Which game mode was being played
+    gameMode: {
+      type: String,
+      enum: ['classic', 'training', 'timed'],
+      required: true,
+    },
+    // How the game ended (by resignation or normal game end)
+    result: {
+      type: String,
+      enum: ['white_wins', 'black_wins', 'draw', 'white_resigned', 'black_resigned'],
+      required: true,
+    },
+    // Tracks which side resigned (if applicable)
+    resignedBy: {
+      type: String,
+      enum: ['white', 'black'],
+      default: null,
+    },
+    // The winner (either by resignation or checkmate/draw)
+    winner: {
+      type: String,
+      enum: ['white', 'black'],
+      default: null,
+    },
+    // Final score (used in timed mode)
+    score: {
+      type: Number,
+      default: 0,
+    },
+    // Board position snapshot for replay/analysis
+    fen: String,
+    // Number of moves played before resignation/end
+    moveCount: Number,
+  },
+  { timestamps: true }
+)
+
+const GameSession = mongoose.models.GameSession || mongoose.model('GameSession', gameSessionSchema)
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -415,6 +480,51 @@ app.post('/api/chess/analyze', async (req, res) => {
     res.json(data)
   } catch (err) {
     res.status(502).json({ error: err.message })
+  }
+})
+
+app.post('/api/games/resign', authRequired, async (req, res) => {
+  try {
+    const { gameMode, resigned_by, winner, fen, score } = req.body
+    const userId = req.user._id
+
+    // Determine the game result status
+    const resignedSide = resigned_by === 'white' ? 'white_resigned' : 'black_resigned'
+
+    // Create a game session record to track this resignation
+    const gameSession = new GameSession({
+      userId,
+      gameMode,
+      result: resignedSide,
+      resignedBy: resigned_by,
+      winner,
+      score: score || 0,
+      fen, // Board state at resignation
+      moveCount: fen ? fen.split(' ')[5] : 0,
+    })
+
+    // Save the game session to database
+    await gameSession.save()
+
+    // Update the player's statistics
+    // The player who resigned gets a loss marked
+    const validGameMode = ['classic', 'training', 'timed'].includes(gameMode) ? gameMode : 'classic'
+    
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        // Increment the loss counter for this game mode
+        $inc: {
+          [`gameStats.${validGameMode}.losses`]: 1,
+        },
+      },
+      { new: true }
+    )
+
+    res.json({ ok: true, message: 'Resignation recorded', gameSession })
+  } catch (err) {
+    console.error('Resignation error:', err.message, err)
+    res.status(500).json({ error: 'Failed to record resignation', details: err.message })
   }
 })
 
