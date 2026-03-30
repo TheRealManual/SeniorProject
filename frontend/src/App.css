@@ -400,6 +400,222 @@ select {
 .discord-btn { background: #5865f2; color: #fff; }
 .discord-btn:hover { background: #6a76f5; }
 
+/* ==================== RESIGN BUTTON ==================== */
+.resign-game-btn {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: linear-gradient(135deg, #8b0000, #c62828);
+  color: #fff;
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.resign-game-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c62828, #e53935);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(198, 40, 40, 0.4);
+}
+.resign-game-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ==================== LEADERBOARD ==================== */
+.app-container:has(.leaderboard-view) {
+  overflow-y: auto;
+  justify-content: flex-start;
+}
+
+.leaderboard-view {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.leaderboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+.leaderboard-header h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  color: #fff;
+}
+
+.mode-filter-buttons {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: center;
+}
+.mode-btn {
+  padding: 0.7rem 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.mode-btn:hover {
+  background: rgba(233, 69, 96, 0.15);
+  border-color: var(--accent-primary);
+}
+.mode-btn.active {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+}
+
+.leaderboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.personal-stats {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.personal-stats h3 {
+  margin: 0 0 1rem 0;
+  color: var(--accent-primary);
+  font-size: 1.1rem;
+}
+.personal-stats .stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border-left: 3px solid var(--accent-primary);
+}
+.stat-row span {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+.stat-row strong {
+  font-size: 1.1rem;
+  color: var(--accent-primary);
+}
+
+.leaderboard-table {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+.leaderboard-table h3 {
+  margin: 0 0 1rem 0;
+  color: #fff;
+  font-size: 1.1rem;
+}
+.leaderboard-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.leaderboard-table th {
+  padding: 0.8rem 1rem;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--accent-primary);
+  background: rgba(233, 69, 96, 0.1);
+  border-bottom: 2px solid var(--panel-border);
+}
+.leaderboard-table td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.9rem;
+}
+.leaderboard-table tbody tr:hover {
+  background: rgba(233, 69, 96, 0.05);
+}
+.leaderboard-table tbody tr.current-user {
+  background: rgba(233, 69, 96, 0.12);
+  font-weight: 600;
+}
+.rank-cell {
+  font-weight: 700;
+  color: var(--accent-primary);
+  font-size: 1rem;
+}
+.player-cell {
+  font-weight: 600;
+  color: #fff;
+}
+.rating-cell strong {
+  color: var(--accent-info);
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--panel-border);
+}
+.pagination-controls button {
+  padding: 0.5rem 1rem;
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+.pagination-controls button:hover:not(:disabled) {
+  background: #ff5a7a;
+}
+.pagination-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+}
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideIn { from { top: 15%; opacity: 0; } to { top: 20%; opacity: 1; } }

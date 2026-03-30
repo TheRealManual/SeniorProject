@@ -108,6 +108,7 @@ const getBackendBaseUrl = (req) => {
 
 const allowedOrigins = Array.from(new Set([
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
   ...configuredOrigins,
 ])).filter(Boolean)
@@ -153,11 +154,70 @@ const userSchema = new mongoose.Schema(
       enum: ['local', 'discord'],
       default: 'local',
     },
+    gameStats: {
+      classic: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
+      },
+      training: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
+      },
+      timed: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        draws: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
+      },
+    },
   },
   { timestamps: true }
 )
 
 const User = mongoose.models.User || mongoose.model('User', userSchema)
+
+const gameSessionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    gameMode: {
+      type: String,
+      enum: ['classic', 'training', 'timed'],
+      required: true,
+    },
+    result: {
+      type: String,
+      enum: ['white_wins', 'black_wins', 'draw', 'white_resigned', 'black_resigned'],
+      required: true,
+    },
+    resignedBy: {
+      type: String,
+      enum: ['white', 'black'],
+      default: null,
+    },
+    winner: {
+      type: String,
+      enum: ['white', 'black'],
+      default: null,
+    },
+    score: {
+      type: Number,
+      default: 0,
+    },
+    fen: String,
+    moveCount: Number,
+  },
+  { timestamps: true }
+)
+
+const GameSession = mongoose.models.GameSession || mongoose.model('GameSession', gameSessionSchema)
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -451,6 +511,222 @@ app.post('/api/chess/training/piece-info', async (req, res) => {
   }
 })
 
+app.post('/api/games/resign', authRequired, async (req, res) => {
+  try {
+    const { gameMode, resigned_by, winner, fen, score, opponentId } = req.body
+    const userId = req.user._id
+
+    const resignedSide = resigned_by === 'white' ? 'white_resigned' : 'black_resigned'
+
+    const gameSession = new GameSession({
+      userId,
+      gameMode,
+      result: resignedSide,
+      resignedBy: resigned_by,
+      winner,
+      score: score || 0,
+      fen,
+      moveCount: fen ? fen.split(' ')[5] : 0,
+    })
+
+    await gameSession.save()
+
+    const validGameMode = ['classic', 'training', 'timed'].includes(gameMode) ? gameMode : 'classic'
+
+    const loserUser = await User.findById(userId)
+    const currentLoserRating = loserUser.gameStats[validGameMode].rating || 0
+    const newLoserRating = Math.max(0, currentLoserRating - 16)
+
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          [`gameStats.${validGameMode}.losses`]: 1,
+        },
+        $set: {
+          [`gameStats.${validGameMode}.rating`]: newLoserRating,
+        },
+      },
+      { new: true }
+    )
+
+    if (opponentId) {
+      await User.findByIdAndUpdate(
+        opponentId,
+        {
+          $inc: {
+            [`gameStats.${validGameMode}.wins`]: 1,
+            [`gameStats.${validGameMode}.rating`]: 16,
+          },
+        },
+        { new: true }
+      )
+    }
+
+    res.json({ ok: true, message: 'Resignation recorded', gameSession })
+  } catch (err) {
+    console.error('Resignation error:', err.message, err)
+    res.status(500).json({ error: 'Failed to record resignation', details: err.message })
+  }
+})
+
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const { mode = 'classic', limit = 50, offset = 0 } = req.query
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+
+    const leaderboard = await User.aggregate([
+      {
+        $project: {
+          username: 1,
+          email: 1,
+          rating: `$gameStats.${gameMode}.rating`,
+          wins: `$gameStats.${gameMode}.wins`,
+          losses: `$gameStats.${gameMode}.losses`,
+          draws: `$gameStats.${gameMode}.draws`,
+          totalGames: {
+            $add: [
+              `$gameStats.${gameMode}.wins`,
+              `$gameStats.${gameMode}.losses`,
+              `$gameStats.${gameMode}.draws`,
+            ],
+          },
+        },
+      },
+      {
+        $match: {
+          totalGames: { $gt: 0 },
+        },
+      },
+      {
+        $addFields: {
+          winRate: {
+            $round: [
+              {
+                $multiply: [
+                  {
+                    $divide: ['$wins', '$totalGames'],
+                  },
+                  100,
+                ],
+              },
+              2,
+            ],
+          },
+        },
+      },
+      {
+        $sort: { rating: -1, wins: -1, winRate: -1 },
+      },
+      { $skip: parseInt(offset) || 0 },
+      { $limit: parseInt(limit) || 50 },
+    ])
+
+    const totalCount = await User.countDocuments({
+      [`gameStats.${gameMode}.totalGames`]: { $exists: true },
+    })
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      leaderboard,
+      totalCount,
+      offset: parseInt(offset) || 0,
+      limit: parseInt(limit) || 50,
+    })
+  } catch (err) {
+    console.error('Leaderboard error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch leaderboard', details: err.message })
+  }
+})
+
+app.get('/api/leaderboard/my-rank', authRequired, async (req, res) => {
+  try {
+    const { mode = 'classic' } = req.query
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+    const userId = req.user._id
+
+    const user = await User.findById(userId)
+    const stats = user.gameStats[gameMode]
+    const totalGames = stats.wins + stats.losses + stats.draws
+
+    const winRate = totalGames > 0 ? ((stats.wins / totalGames) * 100).toFixed(2) : 0
+
+    const rank = await User.countDocuments({
+      $expr: {
+        $gt: [
+          {
+            $getField: `gameStats.${gameMode}.wins`,
+          },
+          stats.wins,
+        ],
+      },
+    })
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      username: user.username,
+      email: user.email,
+      stats: {
+        wins: stats.wins,
+        losses: stats.losses,
+        draws: stats.draws,
+        totalGames,
+        winRate: parseFloat(winRate),
+        rating: user.gameStats[gameMode].rating,
+      },
+      rank: rank + 1,
+    })
+  } catch (err) {
+    console.error('My rank error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch personal rank', details: err.message })
+  }
+})
+
+app.get('/api/game-history', authRequired, async (req, res) => {
+  try {
+    const { mode = 'classic', limit = 20, offset = 0 } = req.query
+    const userId = req.user._id
+    const validModes = ['classic', 'training', 'timed']
+    const gameMode = validModes.includes(mode) ? mode : 'classic'
+
+    const games = await GameSession.find({ userId, gameMode })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) || 20)
+      .skip(parseInt(offset) || 0)
+
+    const totalCount = await GameSession.countDocuments({ userId, gameMode })
+
+    const formattedGames = games.map(game => ({
+      id: game._id,
+      mode: game.gameMode,
+      result: game.result,
+      winner: game.winner,
+      score: game.score,
+      moveCount: game.moveCount,
+      date: game.createdAt,
+      description: game.result.includes('resigned')
+        ? `${game.winner === 'white' ? 'Won' : 'Lost'} by resignation`
+        : game.result,
+    }))
+
+    res.json({
+      ok: true,
+      mode: gameMode,
+      games: formattedGames,
+      totalCount,
+      offset: parseInt(offset) || 0,
+      limit: parseInt(limit) || 20,
+    })
+  } catch (err) {
+    console.error('Game history error:', err.message, err)
+    res.status(500).json({ error: 'Failed to fetch game history', details: err.message })
+  }
+})
+
 const start = async () => {
   try {
     if (!process.env.MONGO_URI) {
@@ -459,6 +735,19 @@ const start = async () => {
 
     await mongoose.connect(process.env.MONGO_URI)
     console.log('Connected to MongoDB')
+
+    // Fix: Apply rating floor of 0 to all existing negative ratings
+    const modes = ['classic', 'training', 'timed']
+    for (const mode of modes) {
+      const users = await User.find({ [`gameStats.${mode}.rating`]: { $lt: 0 } })
+      for (const user of users) {
+        user.gameStats[mode].rating = 0
+        await user.save()
+      }
+      if (users.length > 0) {
+        console.log(`Fixed ${users.length} users with negative ratings in ${mode} mode`)
+      }
+    }
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`)
