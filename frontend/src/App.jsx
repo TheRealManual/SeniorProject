@@ -509,7 +509,12 @@ function App() {
           resultType = game.turn() === 'w' ? 'black_wins' : 'white_wins';
         }
         setGameMessage(result);
-        recordGameCompletion(resultType, 'white'); // User is always white
+        try {
+          await recordGameCompletion(resultType, 'white'); // User is always white
+        } catch (err) {
+          console.error('Failed to record completion:', err);
+          triggerError('Failed to save game to leaderboard');
+        }
         return;
       }
 

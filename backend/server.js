@@ -619,6 +619,12 @@ app.post('/api/games/complete', authRequired, async (req, res) => {
     } else if (result === 'white_wins' || result === 'black_wins') {
       // Determine if current user is winner or loser based on their color
       const { playerColor } = req.body
+      
+      // Validate playerColor is provided
+      if (!playerColor || !['white', 'black'].includes(playerColor)) {
+        return res.status(400).json({ error: 'Invalid or missing playerColor' })
+      }
+      
       const userWon = (result === 'white_wins' && playerColor === 'white') || 
                       (result === 'black_wins' && playerColor === 'black')
 
