@@ -570,6 +570,124 @@ app.post('/api/games/resign', authRequired, async (req, res) => {
   }
 })
 
+app.post('/api/games/complete', authRequired, async (req, res) => {
+  try {
+    const { gameMode, result, fen, score, opponentId, moveCount } = req.body
+    const userId = req.user._id
+
+    // result can be 'white_wins', 'black_wins', or 'draw'
+    if (!['white_wins', 'black_wins', 'draw'].includes(result)) {
+      return res.status(400).json({ error: 'Invalid game result' })
+    }
+
+    const gameSession = new GameSession({
+      userId,
+      gameMode,
+      result,
+      winner: result === 'draw' ? null : result === 'white_wins' ? 'white' : 'black',
+      score: score || 0,
+      fen,
+      moveCount: moveCount || (fen ? fen.split(' ')[5] : 0),
+    })
+
+    await gameSession.save()
+
+    const validGameMode = ['classic', 'training', 'timed'].includes(gameMode) ? gameMode : 'classic'
+
+    if (result === 'draw') {
+      // Both players get a draw
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $inc: {
+            [`gameStats.${validGameMode}.draws`]: 1,
+          },
+        },
+        { new: true }
+      )
+      if (opponentId) {
+        await User.findByIdAndUpdate(
+          opponentId,
+          {
+            $inc: {
+              [`gameStats.${validGameMode}.draws`]: 1,
+            },
+          },
+          { new: true }
+        )
+      }
+    } else if (result === 'white_wins' || result === 'black_wins') {
+      // Determine if current user is winner or loser based on their color
+      const { playerColor } = req.body
+      const userWon = (result === 'white_wins' && playerColor === 'white') || 
+                      (result === 'black_wins' && playerColor === 'black')
+
+      if (userWon) {
+        const currentWinRating = (await User.findById(userId)).gameStats[validGameMode].rating || 0
+        await User.findByIdAndUpdate(
+          userId,
+          {
+            $inc: {
+              [`gameStats.${validGameMode}.wins`]: 1,
+              [`gameStats.${validGameMode}.rating`]: 16,
+            },
+          },
+          { new: true }
+        )
+        if (opponentId) {
+          const loserUser = await User.findById(opponentId)
+          const currentLoserRating = loserUser.gameStats[validGameMode].rating || 0
+          const newLoserRating = Math.max(0, currentLoserRating - 16)
+          await User.findByIdAndUpdate(
+            opponentId,
+            {
+              $inc: {
+                [`gameStats.${validGameMode}.losses`]: 1,
+              },
+              $set: {
+                [`gameStats.${validGameMode}.rating`]: newLoserRating,
+              },
+            },
+            { new: true }
+          )
+        }
+      } else {
+        const currentLoserRating = (await User.findById(userId)).gameStats[validGameMode].rating || 0
+        const newLoserRating = Math.max(0, currentLoserRating - 16)
+        await User.findByIdAndUpdate(
+          userId,
+          {
+            $inc: {
+              [`gameStats.${validGameMode}.losses`]: 1,
+            },
+            $set: {
+              [`gameStats.${validGameMode}.rating`]: newLoserRating,
+            },
+          },
+          { new: true }
+        )
+        if (opponentId) {
+          await User.findByIdAndUpdate(
+            opponentId,
+            {
+              $inc: {
+                [`gameStats.${validGameMode}.wins`]: 1,
+                [`gameStats.${validGameMode}.rating`]: 16,
+              },
+            },
+            { new: true }
+          )
+        }
+      }
+    }
+
+    res.json({ ok: true, message: 'Game completed', gameSession })
+  } catch (err) {
+    console.error('Game completion error:', err.message, err)
+    res.status(500).json({ error: 'Failed to record game completion', details: err.message })
+  }
+})
+
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const { mode = 'classic', limit = 50, offset = 0 } = req.query
@@ -623,9 +741,27 @@ app.get('/api/leaderboard', async (req, res) => {
       { $limit: parseInt(limit) || 50 },
     ])
 
-    const totalCount = await User.countDocuments({
-      [`gameStats.${gameMode}.totalGames`]: { $exists: true },
-    })
+    // Count total users with games (totalGames > 0)
+    const totalCountResult = await User.aggregate([
+      {
+        $match: {
+          $expr: {
+            $gt: [
+              {
+                $add: [
+                  `$gameStats.${gameMode}.wins`,
+                  `$gameStats.${gameMode}.losses`,
+                  `$gameStats.${gameMode}.draws`,
+                ],
+              },
+              0,
+            ],
+          },
+        },
+      },
+      { $count: 'total' },
+    ])
+    const totalCount = totalCountResult.length > 0 ? totalCountResult[0].total : 0
 
     res.json({
       ok: true,
@@ -654,15 +790,9 @@ app.get('/api/leaderboard/my-rank', authRequired, async (req, res) => {
 
     const winRate = totalGames > 0 ? ((stats.wins / totalGames) * 100).toFixed(2) : 0
 
+    // Count users with higher rating to determine rank
     const rank = await User.countDocuments({
-      $expr: {
-        $gt: [
-          {
-            $getField: `gameStats.${gameMode}.wins`,
-          },
-          stats.wins,
-        ],
-      },
+      [`gameStats.${gameMode}.rating`]: { $gt: stats.rating }
     })
 
     res.json({

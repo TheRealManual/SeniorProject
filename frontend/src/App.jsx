@@ -59,6 +59,7 @@ function App() {
   const [leaderboardTotal, setLeaderboardTotal] = useState(0);
   const [personalRank, setPersonalRank] = useState(null);
   const [personalRankLoading, setPersonalRankLoading] = useState(false);
+  const [playerColor, setPlayerColor] = useState('white'); // Track which color the current user is playing
 
   const boardRef = useRef(null);
 
@@ -466,15 +467,54 @@ function App() {
     return () => clearInterval(timer);
   }, [view, timeLeft, isGameOver]);
 
+  // Handle game completion (checkmate/draw) and record to backend
+  const recordGameCompletion = async (resultType, color) => {
+    try {
+      const response = await fetch(`${apiUrl}/api/games/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          gameMode: view,
+          result: resultType,
+          fen: game.fen(),
+          score: score,
+          moveCount: game.history().length,
+          playerColor: color,
+          opponentId: null,
+        }),
+      });
+      if (response.ok) {
+        console.log('Game recorded successfully');
+      } else {
+        console.error('Failed to record game');
+      }
+    } catch (error) {
+      console.error('Game recording error:', error);
+    }
+  };
+
   // AI move in training / vs-AI modes
   useEffect(() => {
     const makeAiMove = async () => {
-      if (!['training', 'classic_ai', 'timed_ai'].includes(view) || turn !== 'black' || isGameOver || game.isGameOver()) {
-        if (game.isGameOver() && !isGameOver) {
-          setIsGameOver(true);
-          const result = game.isCheckmate() ? "Checkmate! White wins!" : "Game Over: Draw!";
-          setGameMessage(result);
+      // Check if game is over (for all modes)
+      if (game.isGameOver() && !isGameOver) {
+        setIsGameOver(true);
+        let result = "Game Over: Draw!";
+        let resultType = 'draw';
+        if (game.isCheckmate()) {
+          result = game.turn() === 'w' ? "Checkmate! Black wins!" : "Checkmate! White wins!";
+          resultType = game.turn() === 'w' ? 'black_wins' : 'white_wins';
         }
+        setGameMessage(result);
+        recordGameCompletion(resultType, 'white'); // User is always white
+        return;
+      }
+
+      // Only make AI move if it's an AI mode and it's black's turn
+      if (!['training', 'classic_ai', 'timed_ai'].includes(view) || turn !== 'black' || isGameOver) {
         return;
       }
 
@@ -598,6 +638,8 @@ function App() {
       }
       return;
     }
+
+
 
     // Try to execute move from selected to clicked
     const moved = executeMove(selectedSquare.row, selectedSquare.col, row, col);
@@ -768,23 +810,23 @@ function App() {
         <div className="lobby-view">
           <h2>Choose Your Mode</h2>
           <div className="menu-grid">
-            <button onClick={() => { setView('classic'); resetMiniGame(); }}>
+            <button onClick={() => { setPlayerColor('white'); setView('classic'); resetMiniGame(); }}>
               <span className="icon">♟️</span> Classic Chess
               <small>Local Player vs Player</small>
             </button>
-            <button onClick={() => { setView('classic_ai'); resetMiniGame(); }}>
+            <button onClick={() => { setPlayerColor('white'); setView('classic_ai'); resetMiniGame(); }}>
               <span className="icon">🤖</span> Classic vs AI
               <small>Player vs Computer</small>
             </button>
-            <button onClick={() => { setView('training'); resetMiniGame(); }}>
+            <button onClick={() => { setPlayerColor('white'); setView('training'); resetMiniGame(); }}>
               <span className="icon">🎓</span> Training Mode
               <small>AI Evaluation</small>
             </button>
-            <button onClick={() => { setView('timed'); resetMiniGame(); }}>
+            <button onClick={() => { setPlayerColor('white'); setView('timed'); resetMiniGame(); }}>
               <span className="icon">⚡</span> Timed Mini-Game
               <small>Blitz Challenge</small>
             </button>
-            <button onClick={() => { setView('timed_ai'); resetMiniGame(); }}>
+            <button onClick={() => { setPlayerColor('white'); setView('timed_ai'); resetMiniGame(); }}>
               <span className="icon">⚡🤖</span> Timed vs AI
               <small>Blitz vs Computer</small>
             </button>
